@@ -1,0 +1,13 @@
+---
+- name: Ensure resolved.conf.d directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: '0755'
+
+- name: Configure DNS servers for systemd-resolved
+  ansible.builtin.template:
+    src: dns_servers.conf.j2
+    dest: /etc/systemd/resolved.conf.d/dns_servers.conf
+    mode: '0644'
+  notify: Restart systemd-resolved

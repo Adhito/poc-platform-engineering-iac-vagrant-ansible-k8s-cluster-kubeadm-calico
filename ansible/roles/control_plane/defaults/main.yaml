@@ -1,0 +1,7 @@
+---
+# Fallback defaults. Real values come from Vagrantfile extra_vars (sourced from settings.yaml).
+control_ip: "192.168.56.10"
+pod_cidr: "172.16.1.0/16"
+service_cidr: "172.17.1.0/18"
+calico_version: "3.28.0"
+configs_path: /vagrant/configs

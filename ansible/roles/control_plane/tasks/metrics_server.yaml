@@ -1,0 +1,7 @@
+---
+- name: Apply metrics-server manifest
+  ansible.builtin.command: >
+    kubectl apply -f https://raw.githubusercontent.com/techiescamp/kubeadm-scripts/main/manifests/metrics-server.yaml
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true

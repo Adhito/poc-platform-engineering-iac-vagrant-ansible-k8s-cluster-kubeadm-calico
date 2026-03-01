@@ -1,0 +1,13 @@
+---
+- name: Add control plane host entry to /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ control_ip }} devnodemaster01"
+    state: present
+
+- name: Add worker node host entries to /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ ip_nw }}{{ ip_start | int + item }} devnodeworker0{{ item }}"
+    state: present
+  loop: "{{ range(1, num_worker_nodes | int + 1) | list }}"

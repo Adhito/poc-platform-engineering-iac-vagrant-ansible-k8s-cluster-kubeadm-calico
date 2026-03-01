@@ -1,0 +1,12 @@
+---
+- name: Download Calico CNI manifest
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/projectcalico/calico/v{{ calico_version }}/manifests/calico.yaml"
+    dest: /tmp/calico.yaml
+    mode: '0644'
+
+- name: Apply Calico CNI manifest
+  ansible.builtin.command: kubectl apply -f /tmp/calico.yaml
+  environment:
+    KUBECONFIG: /root/.kube/config
+  changed_when: true

@@ -1,0 +1,9 @@
+---
+- ansible.builtin.import_tasks: dns.yaml
+- ansible.builtin.import_tasks: swap.yaml
+- ansible.builtin.import_tasks: kernel_modules.yaml
+- ansible.builtin.import_tasks: sysctl.yaml
+- ansible.builtin.import_tasks: crio.yaml
+- ansible.builtin.import_tasks: kubernetes_packages.yaml
+- ansible.builtin.import_tasks: kubelet_config.yaml
+- ansible.builtin.import_tasks: hosts_entries.yaml

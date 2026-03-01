@@ -1,0 +1,12 @@
+---
+- name: Get node IP from eth1 interface
+  ansible.builtin.shell:
+    cmd: "ip --json a s | jq -r '.[] | if .ifname == \"eth1\" then .addr_info[] | if .family == \"inet\" then .local else empty end else empty end'"
+  register: node_local_ip
+  changed_when: false
+
+- name: Configure kubelet with node IP
+  ansible.builtin.template:
+    src: kubelet_extra_args.j2
+    dest: /etc/default/kubelet
+    mode: '0644'
