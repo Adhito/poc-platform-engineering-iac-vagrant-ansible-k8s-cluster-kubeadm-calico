@@ -1,0 +1,16 @@
+---
+- name: Check if node is already joined to cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf_stat
+
+- name: Read join command from shared configs location
+  ansible.builtin.slurp:
+    src: "{{ configs_path }}/setup-join.sh"
+  register: join_command_raw
+  when: not kubelet_conf_stat.stat.exists
+
+- name: Execute kubeadm join command
+  ansible.builtin.command: "{{ join_command_raw.content | b64decode | trim }}"
+  when: not kubelet_conf_stat.stat.exists
+  changed_when: true

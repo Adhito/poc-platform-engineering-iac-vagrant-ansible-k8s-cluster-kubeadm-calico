@@ -1,0 +1,4 @@
+---
+- ansible.builtin.import_tasks: join_cluster.yaml
+- ansible.builtin.import_tasks: kubeconfig.yaml
+- ansible.builtin.import_tasks: label_node.yaml
