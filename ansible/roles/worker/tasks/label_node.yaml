@@ -1,0 +1,8 @@
+---
+- name: Label this node as a worker
+  ansible.builtin.command: "kubectl label node {{ ansible_hostname }} node-role.kubernetes.io/worker=worker --overwrite"
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
