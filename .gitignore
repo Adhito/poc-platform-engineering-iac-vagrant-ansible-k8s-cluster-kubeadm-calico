@@ -1,0 +1,20 @@
+## Files from Vagrant init
+.vagrant/
+
+## Files from auto-generated config
+configs/
+configs/*
+*configs/
+configs/config
+configs/setup-join.sh
+configs/token
+script-manifest/utility-argocd/argocd-tls-export.crt
+script-manifest/utility-argocd/argocd-tls.crt
+script-manifest/utility-argocd/argocd-tls.key
+configs/config
+configs/config
+configs/setup-join.sh
+
+## Files from Claude
+CLAUDE.md
+.claude/
