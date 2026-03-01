@@ -1,0 +1,13 @@
+---
+- name: Configure kernel modules to load at boot
+  ansible.builtin.copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/k8s.conf
+    mode: '0644'
+
+- name: Load kernel modules immediately
+  ansible.builtin.command: modprobe {{ item }}
+  changed_when: false
+  loop: "{{ k8s_kernel_modules }}"

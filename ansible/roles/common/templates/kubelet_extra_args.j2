@@ -1,0 +1,4 @@
+KUBELET_EXTRA_ARGS=--node-ip={{ node_local_ip.stdout | trim }}
+{% if environment is defined and environment | string | length > 0 %}
+{{ environment }}
+{% endif %}

@@ -1,0 +1,27 @@
+---
+# Fallback defaults. Real values always come from Vagrantfile extra_vars (sourced from settings.yaml).
+kubernetes_version: "1.29.0-*"
+kubernetes_version_short: "1.29"
+dns_servers:
+  - 8.8.8.8
+  - 1.1.1.1
+environment: ""
+num_worker_nodes: 2
+ip_nw: "192.168.56."
+ip_start: 10
+control_ip: "192.168.56.10"
+
+# Structural constants — role defaults are always loaded by Ansible regardless of working directory.
+# These were previously in group_vars/all.yaml which ansible_local never picks up.
+crio_keyring_path: /etc/apt/keyrings/cri-o-apt-keyring.gpg
+kubernetes_keyring_path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+k8s_kernel_modules:
+  - overlay
+  - br_netfilter
+
+kubernetes_hold_packages:
+  - kubelet
+  - kubectl
+  - kubeadm
+  - cri-o

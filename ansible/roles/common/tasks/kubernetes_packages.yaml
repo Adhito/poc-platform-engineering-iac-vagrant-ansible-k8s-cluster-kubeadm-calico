@@ -1,0 +1,29 @@
+---
+- name: Download Kubernetes GPG key
+  ansible.builtin.shell:
+    cmd: >
+      curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version_short }}/deb/Release.key |
+      gpg --dearmor -o {{ kubernetes_keyring_path }}
+    creates: "{{ kubernetes_keyring_path }}"
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.copy:
+    content: "deb [signed-by={{ kubernetes_keyring_path }}] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version_short }}/deb/ /\n"
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    mode: '0644'
+
+- name: Install Kubernetes packages and jq
+  ansible.builtin.apt:
+    name:
+      - "kubelet={{ kubernetes_version }}"
+      - "kubectl={{ kubernetes_version }}"
+      - "kubeadm={{ kubernetes_version }}"
+      - jq
+    state: present
+    update_cache: true
+
+- name: Hold Kubernetes and CRI-O packages at current version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ kubernetes_hold_packages }}"

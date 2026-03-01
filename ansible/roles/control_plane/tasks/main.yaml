@@ -1,0 +1,6 @@
+---
+- ansible.builtin.import_tasks: kubeadm_init.yaml
+- ansible.builtin.import_tasks: kubeconfig.yaml
+- ansible.builtin.import_tasks: share_join_command.yaml
+- ansible.builtin.import_tasks: calico.yaml
+- ansible.builtin.import_tasks: metrics_server.yaml

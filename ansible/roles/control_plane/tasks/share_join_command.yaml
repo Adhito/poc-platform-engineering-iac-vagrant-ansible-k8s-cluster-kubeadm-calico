@@ -1,0 +1,17 @@
+---
+- name: Generate kubeadm join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: kubeadm_join_command
+  changed_when: true
+
+- name: Ensure configs directory exists on shared mount
+  ansible.builtin.file:
+    path: "{{ configs_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Write join command to shared configs location for worker nodes
+  ansible.builtin.copy:
+    content: "{{ kubeadm_join_command.stdout }}\n"
+    dest: "{{ configs_path }}/setup-join.sh"
+    mode: '0755'
