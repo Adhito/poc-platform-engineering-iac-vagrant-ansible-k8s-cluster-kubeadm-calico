@@ -1,0 +1,47 @@
+---
+- name: Create ArgoCD namespace
+  ansible.builtin.command: kubectl create namespace {{ argocd_namespace }}
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: ns_result
+  changed_when: ns_result.rc == 0
+  failed_when: ns_result.rc != 0 and 'AlreadyExists' not in ns_result.stderr
+
+- name: Apply ArgoCD install manifest
+  ansible.builtin.command: >
+    kubectl apply -n {{ argocd_namespace }}
+    -f https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_version }}/manifests/install.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
+
+- name: Wait for all ArgoCD pods to be Running
+  ansible.builtin.command: kubectl get pods -n {{ argocd_namespace }} --field-selector=status.phase=Running
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: argocd_pods
+  until: >
+    argocd_pods.rc == 0 and
+    'argocd-server' in argocd_pods.stdout and
+    'argocd-application-controller' in argocd_pods.stdout
+  retries: 60
+  delay: 10
+  changed_when: false
+
+- name: Patch argocd-server service to NodePort on port 30002
+  ansible.builtin.command: >
+    kubectl patch svc argocd-server -n {{ argocd_namespace }}
+    -p '{"spec": {"type": "NodePort", "ports": [{"port": 80, "targetPort": 8080, "nodePort": 30002}]}}'
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
+
+- ansible.builtin.import_tasks: extract_password.yaml

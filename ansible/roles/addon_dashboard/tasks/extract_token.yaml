@@ -1,0 +1,29 @@
+---
+- name: Extract dashboard admin-user token
+  ansible.builtin.shell: >
+    kubectl -n {{ dashboard_namespace }} get secret/admin-user
+    -o go-template='{{ "{{" }}.data.token | base64decode{{ "}}" }}'
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: dashboard_token
+  changed_when: false
+
+- name: Ensure configs directory exists
+  ansible.builtin.file:
+    path: "{{ configs_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Write dashboard token to shared configs location
+  ansible.builtin.copy:
+    content: "{{ dashboard_token.stdout }}\n"
+    dest: "{{ configs_path }}/credential_token"
+    mode: '0600'
+
+- name: Display dashboard access information
+  ansible.builtin.debug:
+    msg:
+      - "Dashboard token saved to: {{ configs_path }}/credential_token"
+      - "Access dashboard at: https://localhost:30001"

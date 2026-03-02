@@ -1,0 +1,8 @@
+---
+# Reference orchestrator playbook.
+# ansible_local invokes per-node playbooks directly (pb_control_plane.yaml, pb_workers.yaml, pb_addons.yaml).
+# Use this only if you switch to a remote Ansible control node.
+
+- import_playbook: pb_control_plane.yaml
+- import_playbook: pb_workers.yaml
+- import_playbook: pb_addons.yaml

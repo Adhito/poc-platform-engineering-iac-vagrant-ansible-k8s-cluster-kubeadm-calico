@@ -1,0 +1,27 @@
+---
+- name: Deploy cluster addons (Dashboard, ArgoCD, and Headlamp)
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Deploy Kubernetes Dashboard
+      ansible.builtin.include_role:
+        name: addon_dashboard
+      when:
+        - dashboard_version is defined
+        - dashboard_version | string | length > 0
+
+    - name: Deploy ArgoCD
+      ansible.builtin.include_role:
+        name: addon_argocd
+      when:
+        - argocd_version is defined
+        - argocd_version | string | length > 0
+
+    - name: Deploy Headlamp
+      ansible.builtin.include_role:
+        name: addon_headlamp
+      when:
+        - headlamp_version is defined
+        - headlamp_version | string | length > 0

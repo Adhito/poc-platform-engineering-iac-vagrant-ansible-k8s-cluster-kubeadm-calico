@@ -1,0 +1,4 @@
+---
+argocd_version: ""
+argocd_namespace: argocd
+configs_path: /vagrant/configs

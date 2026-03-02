@@ -1,0 +1,65 @@
+---
+- name: Create headlamp namespace
+  ansible.builtin.command: kubectl create namespace {{ headlamp_namespace }}
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: ns_result
+  changed_when: ns_result.rc == 0
+  failed_when: ns_result.rc != 0 and 'AlreadyExists' not in ns_result.stderr
+
+- name: Render headlamp manifest from template
+  ansible.builtin.template:
+    src: /vagrant/script-manifest/utility-headlamp/headlamp-main.yaml.j2
+    dest: /tmp/headlamp-main.yaml
+    mode: '0644'
+
+- name: Apply headlamp manifest
+  ansible.builtin.command: kubectl apply -f /tmp/headlamp-main.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
+
+- name: Wait for headlamp pod to be Running
+  ansible.builtin.command: kubectl get pods -n {{ headlamp_namespace }} --field-selector=status.phase=Running
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: headlamp_pods
+  until: headlamp_pods.rc == 0 and 'headlamp' in headlamp_pods.stdout
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Extract headlamp service account token
+  ansible.builtin.shell: >
+    kubectl -n {{ headlamp_namespace }} get secret/headlamp
+    -o go-template='{{ "{{" }}.data.token | base64decode{{ "}}" }}'
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: headlamp_token
+  changed_when: false
+
+- name: Ensure configs directory exists
+  ansible.builtin.file:
+    path: "{{ configs_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Write headlamp token to shared configs location
+  ansible.builtin.copy:
+    content: "{{ headlamp_token.stdout }}\n"
+    dest: "{{ configs_path }}/credential_headlamp_token"
+    mode: '0600'
+
+- name: Display headlamp access information
+  ansible.builtin.debug:
+    msg:
+      - "Headlamp token saved to: {{ configs_path }}/credential_headlamp_token"
+      - "Access Headlamp at: http://localhost:30003"

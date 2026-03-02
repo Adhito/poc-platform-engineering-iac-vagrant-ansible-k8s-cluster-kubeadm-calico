@@ -1,0 +1,4 @@
+---
+dashboard_version: ""
+dashboard_namespace: kubernetes-dashboard
+configs_path: /vagrant/configs
