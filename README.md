@@ -1,5 +1,5 @@
-# Project Platform Engineering IaC Vagrant K8s Cluster
-Provision Kubernetes Cluster (K8S) systematically using Infrastructure as a Code (Vagrant) + some bash script instead provisioning it manually. This POC is inspired by Kelsey Hightower ["Kubernetes The Hard Way"](https://github.com/kelseyhightower/kubernetes-the-hard-way) and meant as a sandbox ground to learn K8S
+# Project Platform Engineering IaC Vagrant Ansbile K8s Cluster
+Provision Kubernetes Cluster (K8S) systematically using Infrastructure as Code — Vagrant manages VM lifecycle and Ansible (running inside each guest via `ansible_local`) handles all provisioning, with no manual steps required on the host. This POC is inspired by Kelsey Hightower ["Kubernetes The Hard Way"](https://github.com/kelseyhightower/kubernetes-the-hard-way) and meant as a sandbox ground to learn K8S
 
 
 
@@ -27,6 +27,7 @@ This project provides a fully automated Kubernetes cluster deployment that inclu
 - **Monitoring**: Kubernetes Dashboard v2.7.0 with admin access
 - **GitOps**: ArgoCD v2.14.8 for continuous deployment
 - **Metrics**: Metrics Server for resource monitoring
+- **Dashboard Alternative**: Headlamp v0.26.0 lightweight Kubernetes UI
 
 The cluster is configured with custom pod and service CIDRs, DNS servers, and port forwarding for easy access to web UIs from your host machine.
 
@@ -58,6 +59,8 @@ The following ports are forwarded from guest VMs to your host machine:
 
 - **30001**: Kubernetes Dashboard UI (https://localhost:30001)
 - **30002**: ArgoCD UI (https://localhost:30002)
+- **30003**: Headlamp UI (http://localhost:30003)
+- **31000**: OpenTelemetry Demo frontend proxy (http://localhost:31000)
 - **32000**: Sample NGINX deployment (if deployed)
 
 ## Prerequisites
@@ -281,7 +284,7 @@ kubectl cluster-info
 
 ### Reprovisioning
 
-Re-run provisioning scripts without destroying VMs:
+Re-run Ansible provisioning without destroying VMs:
 
 ```shell
 # Reprovision all nodes
@@ -289,10 +292,11 @@ vagrant provision
 
 # Reprovision specific node
 vagrant provision devnodemaster01
-
-# Reprovision specific provisioner
-vagrant provision --provision-with setup-dashboard
+vagrant provision devnodeworker01
+vagrant provision devnodeworker02
 ```
+
+> **Note**: `kubeadm init` and `kubeadm join` are one-shot operations guarded by file checks. Reprovisioning the control plane on an already-initialized cluster requires a full `vagrant destroy -f && vagrant up`.
 
 ## Accessing Services
 
@@ -444,21 +448,37 @@ vagrant provision devnodemaster01
 ## Project Structure
 
 ```
-project-platform-engineering-iac-vagrant-k8s-cluster/
-├── Vagrantfile                              # Main Vagrant configuration
-├── settings.yaml                            # Cluster configuration
+poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/
+├── Vagrantfile                              # VM definitions; reads settings.yaml, drives ansible_local
+├── settings.yaml                            # Single source of truth for all versions, IPs, resources
 ├── README.md                                # This file
-├── configs/                                 # Generated configuration files
-│   ├── config                              # Kubernetes kubeconfig
-│   ├── setup-join.sh                       # Worker join command
-│   ├── credential_token                    # Dashboard token
-│   └── credentials_argocd_admin_password   # ArgoCD password
-└── scripts-setup/                          # Provisioning scripts
-    ├── setup-node-all.sh                   # Common setup for all nodes
-    ├── setup-node-control-plane.sh         # Control plane initialization
-    ├── setup-node-worker.sh                # Worker node setup
-    ├── setup-infra-utility-dashboard.sh    # Dashboard deployment
-    └── setup-infra-utility-argocd.sh       # ArgoCD deployment
+├── configs/                                 # Generated during provisioning (do not edit manually)
+│   ├── config                              # Kubernetes kubeconfig for host kubectl access
+│   ├── setup-join.sh                       # kubeadm join command relayed from control plane to workers
+│   ├── credential_token                    # Dashboard bearer token
+│   ├── credentials_argocd_admin_password   # ArgoCD admin password
+│   └── credential_headlamp_token           # Headlamp service account token
+├── ansible/                                 # All provisioning logic
+│   ├── ansible.cfg
+│   ├── inventory/hosts.ini
+│   ├── playbooks/
+│   │   ├── pb_control_plane.yaml           # Runs on devnodemaster01
+│   │   ├── pb_workers.yaml                 # Runs on each worker
+│   │   └── pb_addons.yaml                  # Runs on last worker (Dashboard, ArgoCD, Headlamp)
+│   └── roles/
+│       ├── common/                         # All nodes: CRI-O, kubeadm packages, DNS, swap
+│       ├── control_plane/                  # kubeadm init, Calico, Metrics Server, join relay
+│       ├── worker/                         # kubeadm join, node labeling
+│       ├── addon_dashboard/                # Kubernetes Dashboard + RBAC
+│       ├── addon_argocd/                   # ArgoCD deployment
+│       └── addon_headlamp/                 # Headlamp deployment
+├── script-manifest/                         # Kubernetes manifests applied outside Ansible
+│   ├── utility-dashboard/                  # Dashboard component YAMLs
+│   ├── utility-argocd/                     # ArgoCD service/ingress YAMLs + TLS certs
+│   ├── utility-headlamp/                   # Headlamp Jinja2 template
+│   └── application-otel-demo/              # OpenTelemetry Demo manifests (manual apply)
+└── scripts-setup/                           # Utility shell scripts (post-provision helpers)
+    └── setup-refresh-token.sh              # Refresh expired Dashboard/Headlamp tokens
 ```
 
 ### Generated Files
