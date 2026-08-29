@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: {{ argocd_namespace }}
+  annotations:
+    # argocd-server serves its own (self-signed) TLS on the backend; tell ingress-nginx to
+    # speak HTTPS to it. This needs NO controller-level flag (unlike ssl-passthrough), so it
+    # works on a shared ingress-nginx we do not own.
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  # TLS on the front too, so the browser connects over https and argocd-server does not issue an
+  # HTTP->HTTPS redirect loop. No secretName -> ingress-nginx serves its default self-signed cert
+  # (browser warning is expected, same as the NodePort URL).
+  tls:
+    - hosts:
+        - {{ argocd_ingress_host }}.{{ argocd_ingress_lb_ip }}.nip.io
+  rules:
+    - host: {{ argocd_ingress_host }}.{{ argocd_ingress_lb_ip }}.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
