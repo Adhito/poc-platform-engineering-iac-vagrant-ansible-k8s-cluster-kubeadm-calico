@@ -1,0 +1,47 @@
+# Stage A root Application — app-of-apps (D19). Applied in Phase A1.
+#
+# ############################################################################
+# THIS IS THE PLATFORM ROOT ONLY.
+#
+# Its counterpart, `root-applications.yaml`, lives in the vault repo and must
+# NOT be applied during Stage A. A single root app would deploy the Stage B
+# levels the moment it synced — before Kubernetes auth exists — producing a
+# crash-loop that reads as an application bug and is actually a sequencing
+# error. Two roots are what preserve the phase gate.
+#
+# TODO(A1): ArgoCD cannot resolve this repo's actual git remote, which is an SSH
+# host alias (`git@github.com-adhito909:...`). The HTTPS URL below needs a
+# credential registered in ArgoCD, or swap to a plain SSH URL with a deploy key.
+# The vault repo hit this identical problem — same fix, both repos.
+# ############################################################################
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
+    targetRevision: main
+    path: script-manifest/utility-hashicorp-vault/argocd/applications
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # Retry is not optional here. The monitoring child fails its first sync if
+    # the Prometheus CRDs have not been cached yet — that is expected, not
+    # alarming, and backoff resolves it without intervention.
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

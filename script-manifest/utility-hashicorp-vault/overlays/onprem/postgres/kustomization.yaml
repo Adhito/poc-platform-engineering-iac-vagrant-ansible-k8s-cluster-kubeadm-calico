@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: poc-hashicorp-vault-application
+
+resources:
+  - ../../../base/postgres
+
+# TODO(A0 / P8): confirm the StorageClass name — `kubectl get sc`. The PRD wants
+# it explicit rather than relying on the cluster default, so that a later change
+# of default does not silently repin this volume.
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: local-path

@@ -1,0 +1,41 @@
+# Wave 2 — ServiceMonitor + PrometheusRule (D15). Additive objects only.
+#
+# ############################################################################
+# THIS CHILD MAY NOT BE DEPLOYABLE. Check A0.5 5a first:
+#
+#   kubectl get crd servicemonitors.monitoring.coreos.com prometheusrules.monitoring.coreos.com
+#
+# If those CRDs are absent, this cluster's observability stack is not
+# operator-managed, adding a scrape target would mean EDITING a config that
+# currently works, and the PRD says stop and report (Rule 8). Delete this file
+# from the applications directory in that case — the other children are
+# unaffected and Stage A still completes.
+#
+# Expect a first-sync failure even when the CRDs DO exist, if ArgoCD has not
+# cached them yet. The root app's retry/backoff handles it.
+# ############################################################################
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
+    targetRevision: main
+    path: script-manifest/utility-hashicorp-vault/overlays/onprem/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }

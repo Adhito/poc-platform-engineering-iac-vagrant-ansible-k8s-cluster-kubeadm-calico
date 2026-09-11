@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Sync wave 3 — needs a running, unsealed, bootstrapped Vault.
+#
+# PRECONDITIONS, both from Phase A6/A8 bootstrap (not manifests):
+#   - Vault role `eso` exists, bound to SA external-secrets/external-secrets
+#     with the `eso-reader` policy
+#   - The ESO controller itself is installed (see argocd/applications/external-secrets.yaml)
+#
+# A store that cannot authenticate fails QUIETLY. Check it explicitly:
+#   kubectl get clustersecretstore vault-backend -o jsonpath='{.status.conditions}'
+# Ready=True, or it is not working regardless of what `kubectl apply` said.
+#
+# NOTE: no test ExternalSecret here. Stage B Level 1 owns
+# `applications/level1-env-secret/deploy/base/externalsecret.yaml` in the vault
+# repo — creating one here would collide with it.
+resources:
+  - clustersecretstore.yaml

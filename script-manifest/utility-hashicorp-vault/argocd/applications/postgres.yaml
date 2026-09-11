@@ -1,0 +1,41 @@
+# Wave 3 — throwaway PostgreSQL for the database secrets engine (D12).
+#
+# PRECONDITION: the `postgres-admin` Secret must exist first — it is deliberately
+# not in git (Rule 1). Without it the pod sits in CreateContainerConfigError,
+# which reads as a manifest bug and is not one:
+#
+#   kubectl -n poc-hashicorp-vault-application create secret generic postgres-admin \
+#     --from-literal=POSTGRES_PASSWORD="$(openssl rand -base64 24)"
+#
+# Phase A7 then rotates that password away with
+# `vault write -f database/rotate-root/poc-postgres`, after which no human knows
+# it. That is the moment dynamic secrets stop being an abstraction.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
+    targetRevision: main
+    path: script-manifest/utility-hashicorp-vault/overlays/onprem/postgres
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: poc-hashicorp-vault-application
+  syncPolicy:
+    automated:
+      # prune:false — this holds Level 3's demo data on a local-path volume that
+      # cannot be rescheduled. An accidental prune is a rebuild, not a resync.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }

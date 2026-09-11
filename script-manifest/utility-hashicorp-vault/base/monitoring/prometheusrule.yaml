@@ -1,0 +1,87 @@
+# Phase A9.4 — seal alerting (D15). ADDITIVE OBJECT ONLY.
+#
+# ############################################################################
+# THE GAP THIS CLOSES
+#
+# Vault seals on every restart, and a sealed pod PASSES its readiness probe —
+# the chart's health check treats sealedcode=204 as healthy on purpose, so that
+# Kubernetes does not kill a pod that is merely waiting to be unsealed.
+#
+# With 3 peers, one sealed follower therefore costs nothing visible: quorum
+# holds, apps keep working, and nothing reports a problem — while the cluster
+# sits one event away from the Phase A9.3 restore path.
+#
+# That is silent degradation, which is worse than a loud failure because it
+# removes the chance to act. `vault_core_unsealed` is what makes it loud.
+#
+# TODO(A0.5 check 5b): the `release:` label below must match the Prometheus
+# ruleSelector, same as the ServiceMonitor. Wrong label = rule never loaded.
+#
+# TODO(A0.5 check 5c): confirm Alertmanager actually routes to a human. If it
+# has no receiver, these still fire and are visible in the Prometheus UI —
+# which beats nothing — but DO NOT describe them as "working" if nobody is
+# paged. Wiring a receiver is an edit to their stack: report it, do not do it.
+#
+# Verify the effect, not the apply: A9.4 requires FIRING VaultNodeSealed by
+# sealing a follower. An alert you believe exists but does not is worse than
+# knowing you have none.
+# ############################################################################
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    # PLACEHOLDER — see the TODO above.
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: vault.seal
+      rules:
+        - alert: VaultNodeSealed
+          # 1 = unsealed, 0 = sealed. Per-peer, which is the point.
+          expr: vault_core_unsealed == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: vault
+          annotations:
+            summary: "Vault peer {{ $labels.pod }} is sealed"
+            description: >-
+              Vault peer {{ $labels.pod }} has been sealed for over 5 minutes. It is
+              serving no requests and — because a sealed pod still passes its readiness
+              probe — nothing else will report this. Unseal it manually with 3 of the 5
+              key shares. If quorum is intact this is not yet an outage; it is the
+              warning before one.
+            runbook: "documents/runbooks/seal-unseal.md (vault repo)"
+
+        - alert: VaultNoActiveNode
+          # No leader anywhere = Vault is down, regardless of pod status.
+          expr: absent(vault_core_active == 1)
+          for: 2m
+          labels:
+            severity: critical
+            component: vault
+          annotations:
+            summary: "Vault has no active (leader) node"
+            description: >-
+              No Vault peer reports itself active. Either every peer is sealed, or Raft
+              has lost quorum. On this 2-worker topology, losing the node that hosts two
+              peers causes exactly this — see the runbook for which node that is.
+            runbook: "documents/runbooks/seal-unseal.md (vault repo)"
+
+    - name: vault.availability
+      rules:
+        - alert: VaultTargetDown
+          expr: up{job="vault"} == 0
+          for: 5m
+          labels:
+            severity: warning
+            component: vault
+          annotations:
+            summary: "Prometheus cannot scrape Vault peer {{ $labels.instance }}"
+            description: >-
+              The metrics endpoint has been unreachable for 5 minutes. This is a
+              monitoring failure, not necessarily a Vault failure — but it means
+              VaultNodeSealed is blind for that peer, so treat it as urgent.

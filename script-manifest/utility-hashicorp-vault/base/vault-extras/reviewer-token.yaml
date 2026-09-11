@@ -1,0 +1,44 @@
+# Phase A6 steps 1–2 — the trust anchor for Kubernetes auth (D6).
+#
+# ############################################################################
+# WHY A SECRET-BACKED TOKEN AND NOT THE PROJECTED ONE
+#
+# Projected ServiceAccount tokens rotate roughly hourly. Vault reads
+# `token_reviewer_jwt` ONCE at `vault write auth/kubernetes/config` time and
+# never re-reads it. Point it at a projected token and Kubernetes auth works
+# perfectly — until the rotation, hours later, at which point every login
+# fails with an error that looks nothing like "your token expired".
+#
+# This is the classic Vault-on-Kubernetes footgun. A Secret of type
+# kubernetes.io/service-account-token is not rotated, which is exactly what
+# is wanted here and nowhere else.
+# ############################################################################
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-reviewer-token
+  namespace: vault
+  annotations:
+    # The controller populates .data.token for this ServiceAccount.
+    # The SA itself is created by the Helm chart in wave 1; this Secret can be
+    # created first and is populated once the SA appears.
+    kubernetes.io/service-account.name: vault
+type: kubernetes.io/service-account-token
+---
+# Lets Vault call the TokenReview API to validate incoming SA JWTs.
+#
+# Binding this to Vault's own SA (rather than omitting token_reviewer_jwt) is
+# what keeps every *client* ServiceAccount from needing auth-delegator itself —
+# which would be badly over-privileged for an app that just wants to read a secret.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: vault

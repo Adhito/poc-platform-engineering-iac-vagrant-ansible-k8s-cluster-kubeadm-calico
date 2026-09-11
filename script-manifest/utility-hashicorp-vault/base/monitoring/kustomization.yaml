@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vault
+
+# Sync wave 2. Both objects are ADDITIVE — Prometheus discovers them on its own.
+# Nothing here edits an existing scrape config, alert rule, dashboard, or
+# Alertmanager route (Rule 8 / D15).
+#
+# PRECONDITION (A0.5 check 5a): these CRDs must exist —
+#   kubectl get crd servicemonitors.monitoring.coreos.com prometheusrules.monitoring.coreos.com
+# If they are absent, the observability stack is not operator-managed, adding a
+# target means editing a file that currently works, and the PRD says STOP AND
+# REPORT. Do not sync this child in that case; the other four are unaffected.
+resources:
+  - servicemonitor.yaml
+  - prometheusrule.yaml
