@@ -1,0 +1,42 @@
+---
+- name: Apply MetalLB manifest
+  ansible.builtin.command: >
+    kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v{{ metallb_version }}/config/manifests/metallb-native.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
+
+- name: Wait for MetalLB controller and speaker pods to be Running
+  ansible.builtin.command: kubectl get pods -n {{ metallb_namespace }} --field-selector=status.phase=Running
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: metallb_pods
+  until: >
+    metallb_pods.rc == 0 and
+    'controller' in metallb_pods.stdout and
+    'speaker' in metallb_pods.stdout
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Render MetalLB IP address pool manifest from template
+  ansible.builtin.template:
+    src: /vagrant/script-manifest/utility-metallb/metallb-pool.yaml.j2
+    dest: /tmp/metallb-pool.yaml
+    mode: '0644'
+
+- name: Apply MetalLB IP address pool and L2Advertisement
+  ansible.builtin.command: kubectl apply -f /tmp/metallb-pool.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: metallb_pool_apply
+  until: metallb_pool_apply.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: true

@@ -1,10 +1,24 @@
 ---
-- name: Deploy cluster addons (Dashboard, ArgoCD, and Headlamp)
+- name: Deploy cluster addons (MetalLB, ingress-nginx, Dashboard, ArgoCD, and Headlamp)
   hosts: all
   become: true
   gather_facts: true
 
   tasks:
+    - name: Deploy MetalLB
+      ansible.builtin.include_role:
+        name: addon_metallb
+      when:
+        - metallb_version is defined
+        - metallb_version | string | length > 0
+
+    - name: Deploy ingress-nginx
+      ansible.builtin.include_role:
+        name: addon_ingress_nginx
+      when:
+        - ingress_nginx_version is defined
+        - ingress_nginx_version | string | length > 0
+
     - name: Deploy Kubernetes Dashboard
       ansible.builtin.include_role:
         name: addon_dashboard

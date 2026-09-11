@@ -1,0 +1,4 @@
+---
+ingress_nginx_version: ""
+ingress_nginx_namespace: ingress-nginx
+configs_path: /vagrant/configs
