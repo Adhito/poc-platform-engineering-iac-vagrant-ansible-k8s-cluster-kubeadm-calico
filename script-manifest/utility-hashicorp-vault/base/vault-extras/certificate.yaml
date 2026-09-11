@@ -1,0 +1,54 @@
+# Phase A2 step 1 — Vault's serving certificate (D7).
+#
+# ############################################################################
+# SANs must cover EVERY name and IP Vault will ever be addressed by.
+#
+# A missing SAN does not fail loudly here. It surfaces later as an unexplained
+# Raft-join failure in Phase A4, or — worse — as a TLS verification failure on
+# the NodePort break-glass path at the exact moment you need it during a seal
+# event. Get it right once.
+#
+# The IP addresses are the easily-forgotten half and are environment-specific,
+# so they live in overlays/onprem/ rather than here. This base carries only
+# the in-cluster DNS names, which are the same on any cluster.
+# ############################################################################
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+spec:
+  # The chart mounts this Secret at /vault/userconfig/vault-tls.
+  secretName: vault-tls
+  duration: 8760h    # 1y
+  renewBefore: 720h  # 30d
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-poc-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    # Chart-provided Services
+    - vault
+    - vault.vault
+    - vault.vault.svc
+    - vault.vault.svc.cluster.local
+    - vault-active
+    - vault-active.vault.svc.cluster.local
+    - vault-standby
+    - vault-standby.vault.svc.cluster.local
+    # Our LoadBalancer Service (D8 primary path)
+    - vault-lb
+    - vault-lb.vault.svc.cluster.local
+    # Headless Service — per-peer Raft addressing. The wildcard covers
+    # vault-0/1/2; cluster_addr uses these names.
+    - "*.vault-internal"
+    - "*.vault-internal.vault.svc.cluster.local"
+    # In-pod localhost checks (e.g. the A9.4 telemetry curl)
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+    # MetalLB VIP + the three node IPs are appended by overlays/onprem.

@@ -1,0 +1,65 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vault
+
+resources:
+  - ../../../base/vault-extras
+
+# ############################################################################
+# THE ENVIRONMENT VALUES. Everything cluster-specific for wave 0 is here, so the
+# base stays portable and there is one place to look when an address changes.
+#
+# TODO(A0): every value below needs confirming against the live cluster before
+# first sync. They are current best knowledge, not verified facts.
+#
+#   Node IPs      192.168.56.10 / .11 / .12   (settings.yaml: control_ip + workers)
+#   MetalLB VIP   192.168.56.241              ← PROPOSED, NOT CONFIRMED
+#
+# On the VIP: this cluster's MetalLB pool `local-pool` (192.168.56.240-.250) is
+# owned by the observability team's ArgoCD `metallb` app, and .240 is already
+# taken by ingress-nginx. Requesting .241 from that pool is ADDITIVE — it
+# allocates an address, it does not edit their IPAddressPool — which keeps this
+# inside Rule 8. Confirm it is free first:
+#
+#   kubectl get svc -A -o wide | grep 192.168.56.24
+#
+# The VIP must be PINNED, not auto-assigned: it appears in the cert SANs, and an
+# address that moves on resync silently invalidates the certificate.
+# ############################################################################
+patches:
+  # ---- Certificate SANs (Phase A2 step 1) ----
+  - target:
+      group: cert-manager.io
+      version: v1
+      kind: Certificate
+      name: vault-tls
+    patch: |-
+      # The node IPs are the easily-forgotten ones. Without them the NodePort
+      # break-glass path fails TLS verification at precisely the moment it is
+      # needed — during a seal event, when MetalLB may also be why you are here.
+      - op: replace
+        path: /spec/ipAddresses
+        value:
+          - 127.0.0.1
+          - 192.168.56.241   # MetalLB VIP        — D8 primary path
+          - 192.168.56.10    # devnodemaster01    — D8 NodePort path
+          - 192.168.56.11    # devnodeworker01    — D8 NodePort path
+          - 192.168.56.12    # devnodeworker02    — D8 NodePort path
+      # Friendly name for the dev workspace hosts entry (Phase A5 step 3).
+      # If this name is ever changed, the cert must be REISSUED — add it here
+      # first, not after the browser complains.
+      - op: add
+        path: /spec/dnsNames/-
+        value: vault.learning-labs.local
+
+  # ---- MetalLB VIP pin (Phase A2 step 5) ----
+  - target:
+      version: v1
+      kind: Service
+      name: vault-lb
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          metallb.io/loadBalancerIPs: "192.168.56.241"

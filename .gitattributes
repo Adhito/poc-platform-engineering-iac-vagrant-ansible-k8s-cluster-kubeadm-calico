@@ -1,0 +1,8 @@
+# Shell scripts must keep LF line endings regardless of core.autocrlf.
+#
+# This repo is edited on Windows (core.autocrlf=true) but its working tree is
+# served to Linux guests as the /vagrant synced folder, where scripts are
+# executed directly. A CRLF-converted script fails on the guest with
+# `$'\r': command not found` or `bad interpreter` — so without this, a fresh
+# clone or checkout on Windows silently breaks every bootstrap script.
+*.sh text eol=lf

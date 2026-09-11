@@ -1,0 +1,24 @@
+# Phase A0 / P8 — Rancher local-path-provisioner: the StorageClass that Vault's
+# and Postgres's PVCs name explicitly.
+#
+# Pinned to the v0.0.37 release manifest (2026-08-05). Applied directly as an A0
+# prerequisite, like cert-manager — NOT through root-platform:
+#
+#   kubectl apply -k script-manifest/utility-hashicorp-vault/base/local-path-provisioner
+#
+# Checked before adding it to a SHARED cluster:
+#   - The upstream manifest does NOT annotate the StorageClass as default, so
+#     other teams' PVCs without a storageClassName are unaffected.
+#   - volumeBindingMode: WaitForFirstConsumer — each PV is created on whichever
+#     node its pod schedules to, and pinned there. See documents/environment.md
+#     §Storage for what that costs when a node is lost.
+#
+# Known gap vs Rule 10: the provisioner image is pinned (v0.0.37), but the helper
+# pod image inside the upstream ConfigMap is `docker.io/library/busybox` with no
+# tag. It only runs to create/remove hostPath directories. Pinning it means
+# patching a YAML string embedded in the ConfigMap; left as upstream, recorded here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.37/deploy/local-path-storage.yaml

@@ -23,6 +23,10 @@ ANSIBLE_EXTRA_VARS = {
   "dashboard_version"        => settings["software"]["dashboard"] || "",
   "argocd_version"           => settings["software"]["argocd"] || "",
   "headlamp_version"         => settings["software"]["headlamp"] || "",
+  "metallb_version"          => settings["software"]["metallb"] || "",
+  "ingress_nginx_version"    => settings["software"]["ingress_nginx"] || "",
+  "metallb_ip_range"         => settings["network"]["metallb_ip_range"],
+  "existing_ingress_nginx_lb_ip" => settings["network"]["existing_ingress_nginx_lb_ip"] || "",
   "os"                       => settings["software"]["os"],
   "num_worker_nodes"         => NUM_WORKER_NODES,
   "ip_nw"                    => IP_NW,
@@ -71,7 +75,7 @@ Vagrant.configure("2") do |config|
       vb.name = "DEVNODEMASTER01-ANSIBLE"
       vb.cpus = settings["nodes"]["control"]["cpu"]
       vb.memory = settings["nodes"]["control"]["memory"]
-      vb.gui = true
+      vb.gui = false
       if settings["cluster_name"] and settings["cluster_name"] != ""
         vb.customize ["modifyvm", :id, "--groups", ("/" + settings["cluster_name"])]
       end
@@ -105,7 +109,7 @@ Vagrant.configure("2") do |config|
         vb.name = "DEVNODEWORKER0#{i}-ANSIBLE"
         vb.cpus = settings["nodes"]["workers"]["cpu"]
         vb.memory = settings["nodes"]["workers"]["memory"]
-        vb.gui = true
+        vb.gui = false
         if settings["cluster_name"] and settings["cluster_name"] != ""
           vb.customize ["modifyvm", :id, "--groups", ("/" + settings["cluster_name"])]
         end
@@ -123,9 +127,11 @@ Vagrant.configure("2") do |config|
       ## Stage : Deploy addons after the last worker is provisioned.
       ## BUG FIX: dashboard and argocd now each check their own version string independently.
       if i == NUM_WORKER_NODES
-        should_run_addons = (settings["software"]["dashboard"] && settings["software"]["dashboard"] != "") ||
-                            (settings["software"]["argocd"]    && settings["software"]["argocd"]    != "") ||
-                            (settings["software"]["headlamp"]  && settings["software"]["headlamp"]  != "")
+        should_run_addons = (settings["software"]["dashboard"]     && settings["software"]["dashboard"]     != "") ||
+                            (settings["software"]["argocd"]        && settings["software"]["argocd"]        != "") ||
+                            (settings["software"]["headlamp"]      && settings["software"]["headlamp"]      != "") ||
+                            (settings["software"]["metallb"]       && settings["software"]["metallb"]       != "") ||
+                            (settings["software"]["ingress_nginx"] && settings["software"]["ingress_nginx"] != "")
 
         if should_run_addons
           node.vm.provision "ansible_local" do |ansible|

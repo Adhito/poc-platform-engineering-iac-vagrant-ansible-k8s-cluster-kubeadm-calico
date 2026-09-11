@@ -1,0 +1,31 @@
+# Wave 0 — MUST complete before Vault starts.
+#
+# The StatefulSet MOUNTS the TLS Secret this Certificate produces. If Vault
+# starts first it crash-loops on a missing volume, which looks like a chart
+# problem and is an ordering problem.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-extras
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
+    targetRevision: main
+    path: script-manifest/utility-hashicorp-vault/overlays/onprem/vault-extras
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      # The namespace is a Phase A0 prerequisite, applied directly.
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }

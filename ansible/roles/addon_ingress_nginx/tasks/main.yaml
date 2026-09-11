@@ -1,0 +1,57 @@
+---
+- name: Apply ingress-nginx controller manifest
+  ansible.builtin.command: >
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v{{ ingress_nginx_version }}/deploy/static/provider/cloud/deploy.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: true
+
+- name: Wait for ingress-nginx controller pod to be Running
+  ansible.builtin.command: kubectl get pods -n {{ ingress_nginx_namespace }} --field-selector=status.phase=Running
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: ingress_nginx_pods
+  until: ingress_nginx_pods.rc == 0 and 'ingress-nginx-controller' in ingress_nginx_pods.stdout
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Wait for ingress-nginx controller LoadBalancer IP to be assigned
+  ansible.builtin.command: >
+    kubectl get svc ingress-nginx-controller -n {{ ingress_nginx_namespace }}
+    -o jsonpath={.status.loadBalancer.ingress[0].ip}
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  register: ingress_nginx_lb_ip_result
+  until: ingress_nginx_lb_ip_result.stdout | length > 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Store ingress-nginx controller LoadBalancer IP as a fact
+  ansible.builtin.set_fact:
+    ingress_nginx_lb_ip: "{{ ingress_nginx_lb_ip_result.stdout }}"
+
+- name: Ensure configs directory exists
+  ansible.builtin.file:
+    path: "{{ configs_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Write ingress-nginx LoadBalancer IP to shared configs location
+  ansible.builtin.copy:
+    content: "{{ ingress_nginx_lb_ip }}\n"
+    dest: "{{ configs_path }}/credential_ingress_nginx_lb_ip"
+    mode: '0644'
+
+- name: Display ingress-nginx access information
+  ansible.builtin.debug:
+    msg:
+      - "ingress-nginx controller LoadBalancer IP: {{ ingress_nginx_lb_ip }}"
+      - "IP saved to: {{ configs_path }}/credential_ingress_nginx_lb_ip"

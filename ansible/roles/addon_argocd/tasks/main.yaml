@@ -44,4 +44,26 @@
   become_user: vagrant
   changed_when: true
 
+- name: Determine effective ingress-nginx LoadBalancer IP for the ArgoCD ingress
+  # Prefer the IP discovered by addon_ingress_nginx (fresh standalone cluster); otherwise fall
+  # back to the existing shared controller's IP from settings.yaml (shared/GitOps cluster).
+  ansible.builtin.set_fact:
+    argocd_ingress_lb_ip: "{{ ingress_nginx_lb_ip | default(existing_ingress_nginx_lb_ip | default('')) }}"
+
+- name: Render ArgoCD ingress manifest from template
+  ansible.builtin.template:
+    src: /vagrant/script-manifest/utility-argocd/argocd-ingress-nip.yaml.j2
+    dest: /tmp/argocd-ingress.yaml
+    mode: '0644'
+  when: argocd_ingress_lb_ip | length > 0
+
+- name: Apply ArgoCD ingress manifest
+  ansible.builtin.command: kubectl apply -f /tmp/argocd-ingress.yaml
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  when: argocd_ingress_lb_ip | length > 0
+  changed_when: true
+
 - ansible.builtin.import_tasks: extract_password.yaml

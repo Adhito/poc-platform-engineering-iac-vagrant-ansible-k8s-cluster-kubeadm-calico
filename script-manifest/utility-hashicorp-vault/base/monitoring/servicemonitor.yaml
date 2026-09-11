@@ -1,0 +1,67 @@
+# Phase A9.4 — metrics scrape (D15). ADDITIVE OBJECT ONLY.
+#
+# ############################################################################
+# TODO(A0.5 check 5b): CONFIRM THE DISCOVERY LABEL BEFORE TRUSTING THIS.
+#
+# This is the step people skip, and it fails silently — the ServiceMonitor
+# applies cleanly, reports no error, and is simply never scraped.
+#
+# Many kube-prometheus-stack installs set
+# `serviceMonitorSelectorNilUsesHelmValues: true`, which means Prometheus only
+# discovers ServiceMonitors carrying its Helm release label. Find the real one:
+#
+#   kubectl get prometheus -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.spec.serviceMonitorSelector}{"\t"}{.spec.serviceMonitorNamespaceSelector}{"\n"}{end}'
+#
+# Then fix the `release:` label below to match, and check
+# serviceMonitorNamespaceSelector includes `vault`. If it does NOT, adding it
+# is an EDIT to the observability team's config — report it, do not do it (Rule 8).
+#
+# Verify the effect, not the apply: the target must show UP in Prometheus.
+# ############################################################################
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app.kubernetes.io/name: vault
+    # PLACEHOLDER — see the TODO above.
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - vault
+  selector:
+    # Targets the chart's HEADLESS `vault-internal` Service, not `vault-active`.
+    #
+    # The requirement is per-peer seal status: scraping only the leader defeats
+    # the purpose, because a sealed FOLLOWER is the silent-degradation case this
+    # whole alert exists to catch. A headless Service yields one target per pod.
+    #
+    # `vault-internal: "true"` is also the one label that uniquely identifies a
+    # single chart Service — `vault`, `vault-active`, and `vault-standby` all
+    # share the standard app.kubernetes.io labels, so selecting on those alone
+    # would scrape the same pods several times over.
+    matchLabels:
+      app.kubernetes.io/name: vault
+      app.kubernetes.io/instance: vault
+      vault-internal: "true"
+  endpoints:
+    - port: https
+      scheme: https
+      path: /v1/sys/metrics
+      params:
+        format:
+          - prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+      # No bearer token: the listener sets
+      # `telemetry { unauthenticated_metrics_access = true }` (values-onprem.yaml).
+      tlsConfig:
+        # Rule 3 — never `insecureSkipVerify: true`. If this fails, a SAN is
+        # missing from the Certificate, which is the thing to fix.
+        ca:
+          secret:
+            name: vault-tls
+            key: ca.crt
+        serverName: vault.vault.svc.cluster.local

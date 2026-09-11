@@ -1,0 +1,28 @@
+# Phase A0 step 7 — the three Stage A namespaces (D17).
+#
+# `vault` is deliberately plain, not `vault-poc`: it should read as a platform
+# namespace so this design promotes later without renaming. POC-ness is confined
+# to the application tier, where it belongs.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+  labels:
+    app.kubernetes.io/part-of: vault-poc-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    app.kubernetes.io/part-of: vault-poc-platform
+---
+# Stage B's namespace. Created by Stage A because Stage A seeds PostgreSQL into it
+# (D12) and binds Vault roles against it (A6). Stage B's ArgoCD children are set to
+# CreateNamespace=false precisely because this namespace is Stage A's to own.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: poc-hashicorp-vault-application
+  labels:
+    app.kubernetes.io/part-of: vault-poc-application

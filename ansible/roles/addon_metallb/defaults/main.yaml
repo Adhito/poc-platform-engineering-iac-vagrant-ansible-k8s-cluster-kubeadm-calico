@@ -1,0 +1,4 @@
+---
+metallb_version: ""
+metallb_namespace: metallb-system
+configs_path: /vagrant/configs

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: poc-hashicorp-vault-application
+
+# Sync wave 3.
+#
+# PRECONDITION: the `postgres-admin` Secret must exist before first sync — it is
+# deliberately not in git (Rule 1). Without it the pod sits in
+# CreateContainerConfigError, which reads as a manifest bug and is not one.
+resources:
+  - seed-configmap.yaml
+  - statefulset.yaml

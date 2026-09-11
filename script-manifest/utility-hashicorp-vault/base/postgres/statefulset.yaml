@@ -1,0 +1,119 @@
+# Phase A7 step 2 — throwaway PostgreSQL for the database secrets engine (D12).
+#
+# Deliberately dedicated to this POC and disposable. Vault needs a PRIVILEGED
+# account here (it creates and drops roles on demand), which is exactly why this
+# must never point at anything shared — blast radius stays at zero.
+#
+# It lives with the applications rather than in `vault` so the platform namespace
+# stays free of app-tier data.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: poc-hashicorp-vault-application
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: vault-poc-application
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/part-of: vault-poc-application
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          # D16 — pinned, never `latest`. Verified 2026-09-11: 16.15 is the current
+          # 16.x patch. Staying on the 16 major keeps the seed SQL and Vault's
+          # postgresql-database-plugin behaviour exactly as tested.
+          image: postgres:16.15-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            # The superuser Vault itself connects as. Phase A7 rotates this
+            # password away with `vault write -f database/rotate-root/poc-postgres`,
+            # after which no human knows it — that is the point of the exercise.
+            - name: POSTGRES_USER
+              value: vaultadmin
+            - name: POSTGRES_DB
+              value: appdb
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  # ###############################################
+                  # NOT IN GIT (Rule 1). Create before first sync:
+                  #
+                  #   kubectl -n poc-hashicorp-vault-application \
+                  #     create secret generic postgres-admin \
+                  #     --from-literal=POSTGRES_PASSWORD="$(openssl rand -base64 24)"
+                  # ###############################################
+                  name: postgres-admin
+                  key: POSTGRES_PASSWORD
+            # The image refuses to initialise into a non-empty mount otherwise —
+            # local-path volumes are not guaranteed to be empty on rebind.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: seed
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "vaultadmin", "-d", "appdb"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "vaultadmin", "-d", "appdb"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: seed
+          configMap:
+            name: postgres-seed
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName is environment-specific — set in overlays/onprem.
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: poc-hashicorp-vault-application
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  # Vault reaches this at
+  #   postgres.poc-hashicorp-vault-application.svc:5432
+  # which is the host in `database/config/poc-postgres`'s connection_url.
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

@@ -1,0 +1,59 @@
+# Wave 1 — Vault itself, as an ArgoCD MULTI-SOURCE Application (D1).
+#
+# The chart comes from HashiCorp's Helm repo; the values come from git. That
+# keeps values under review without vendoring the chart, and makes an upgrade a
+# one-line pinned-version bump.
+#
+# ############################################################################
+# TODO(A0 step 4): confirm ArgoCD permits Helm-repo sources AND multi-source
+# Applications. If multi-source is unavailable on this ArgoCD version, the
+# documented fallback is Kustomize `helmCharts:` inflation — but CONFIRM FIRST
+# rather than assuming; it adds a render step and obscures chart upgrades.
+#
+# Also add https://helm.releases.hashicorp.com to ArgoCD's allowed repos if its
+# config restricts them.
+# ############################################################################
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://helm.releases.hashicorp.com
+      chart: vault
+      # D16 — pinned, never `latest`. Verified current stable on 2026-09-11:
+      # chart 0.34.1 ships Vault 2.0.4 and declares kubeVersion ">= 1.20.0-0",
+      # so it runs on this cluster's 1.29. Vault 2.0 makes sys/generate-root and
+      # sys/rekey authenticated by default — kept deliberately; see
+      # bootstrap/95-create-breakglass.sh for how recovery still works.
+      targetRevision: 0.34.1
+      helm:
+        valueFiles:
+          - $values/script-manifest/utility-hashicorp-vault/helm/vault/values-onprem.yaml
+    - repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
+      targetRevision: main
+      # `ref` makes this source addressable as $values above; it contributes no
+      # manifests of its own.
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: true
+      # NOTE: selfHeal will revert manual `kubectl edit`s on Vault's resources.
+      # That is wanted — but it means Phase A4's scale to 3 replicas must be done
+      # by changing `ha.replicas` in values-onprem.yaml and committing, NOT by
+      # `kubectl scale`, which ArgoCD would simply undo.
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff: { duration: 10s, factor: 2, maxDuration: 3m }

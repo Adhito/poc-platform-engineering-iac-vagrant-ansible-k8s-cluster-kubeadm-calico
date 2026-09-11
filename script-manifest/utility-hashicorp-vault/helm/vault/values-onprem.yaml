@@ -1,0 +1,220 @@
+# Vault Helm chart values — the git half of the multi-source Application (D1).
+#
+# The chart comes from https://helm.releases.hashicorp.com; this file stays under
+# git review without vendoring the chart, so an upgrade is a pinned-version bump.
+#
+# ############################################################################
+# ENVIRONMENT VALUES IN THIS FILE
+#
+# Everything else in this build keeps environment values in overlays/onprem/.
+# Helm values cannot be kustomize-patched, so the two marked TODO(A0) below live
+# here instead. They are the only ones — confirm both against the live cluster
+# before the first sync.
+# ############################################################################
+
+global:
+  enabled: true
+  # TLS from Phase A2 onward (D7). Never flip this to true "for now".
+  tlsDisable: false
+
+# Stage B covers three consumption patterns without it; the sidecar injector is
+# a fourth, deliberately deferred (Stage B Level 5 backlog). Off = less surface.
+injector:
+  enabled: false
+
+# `ui.enabled` only controls whether the CHART creates an extra `vault-ui` Service.
+# The web UI itself is switched on by `ui = true` in the HCL below and is served
+# through our own vault-lb / vault-nodeport Services (D8), so no chart Service is
+# wanted. (An earlier `ui.enabled_service` key here is not a chart key at all and
+# was silently ignored — caught by diffing this file against the chart's values.)
+ui:
+  enabled: false
+
+server:
+  image:
+    repository: hashicorp/vault
+    # D16 — pinned. Vault's storage format is version-sensitive and DOWNGRADES
+    # ARE NOT SUPPORTED, so settle this before `operator init`, not after.
+    # Verified current stable 2026-09-11 (chart 0.34.1's appVersion). Vault 2.0
+    # made sys/generate-root and sys/rekey authenticated — handled by
+    # bootstrap/95-create-breakglass.sh.
+    tag: "2.0.4"
+    # Must sit under `image:`. A top-level `server.imagePullPolicy` is not a chart
+    # key and was silently ignored.
+    pullPolicy: IfNotPresent
+
+  logLevel: info
+  logFormat: json
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  # ---- Storage -------------------------------------------------------------
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    mountPath: /vault/data
+    accessMode: ReadWriteOnce
+    # TODO(A0 / P8): confirm the StorageClass name and that local-path-provisioner
+    # is actually installed. `kubectl get sc`. If it is the cluster default this
+    # may be left empty, but the PRD prefers it explicit — an implicit default
+    # that changes later is a silent repin of every Vault PVC.
+    #
+    # UNDERSTAND THE CONSEQUENCE: local-path pins each PV to whichever node first
+    # scheduled the pod. A peer whose node is lost loses its data volume outright
+    # — it cannot reschedule. See §3.1; this is why the A9.3 restore drill matters.
+    storageClass: local-path
+
+  # D14 — audit goes to stdout, NOT to a PVC. A full audit PVC causes Vault to
+  # BLOCK ALL REQUESTS, because it refuses to serve what it cannot audit. That is
+  # a real availability hazard traded away for free here.
+  auditStorage:
+    enabled: false
+
+  # ---- TLS -----------------------------------------------------------------
+  volumes:
+    - name: vault-tls
+      secret:
+        secretName: vault-tls   # produced by base/vault-extras/certificate.yaml (wave 0)
+  volumeMounts:
+    - name: vault-tls
+      mountPath: /vault/userconfig/vault-tls
+      readOnly: true
+
+  extraEnvironmentVars:
+    VAULT_ADDR: https://127.0.0.1:8200
+    VAULT_CACERT: /vault/userconfig/vault-tls/ca.crt
+    VAULT_SKIP_VERIFY: "false"   # Rule 3, stated explicitly so nobody "temporarily" flips it
+
+  # ---- HA / Raft -----------------------------------------------------------
+  standalone:
+    enabled: false
+
+  ha:
+    enabled: true
+    raft:
+      enabled: true
+      setNodeId: true
+
+      # D3 — PHASED REPLICA COUNT. Phase A2 runs this at 1; Phase A4 changes it
+      # to 3 and nothing else in this file changes.
+      #
+      # Why not start at 3: getting persistence, TLS, and manual unseal right on
+      # ONE node isolates those failures from Raft join and leader election.
+      # Debugging all of it at once is where the hours go.
+      config: |
+        listener "tcp" {
+          address            = "[::]:8200"
+          cluster_address    = "[::]:8201"
+          tls_cert_file      = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file       = "/vault/userconfig/vault-tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+
+          telemetry {
+            # D15 — lets Prometheus scrape /v1/sys/metrics without a token.
+            # If this is missing, the A9.4 ServiceMonitor scrapes nothing and the
+            # seal alert never fires. Fix it HERE, not in the ServiceMonitor.
+            unauthenticated_metrics_access = true
+          }
+        }
+
+        storage "raft" {
+          path    = "/vault/data"
+          node_id = "${HOSTNAME}"
+
+          # All three peers listed from the start (A4 step 1). Harmless while
+          # replicas=1 — the attempts simply fail until the peers exist — and it
+          # means scaling to 3 needs no config change, only a replica count.
+          retry_join {
+            leader_api_addr     = "https://vault-0.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr     = "https://vault-1.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr     = "https://vault-2.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+          }
+        }
+
+        # Sets the `vault-active: "true"` pod label that vault-lb and
+        # vault-nodeport select on, so both exposure paths follow leader failover
+        # with no intervention.
+        service_registration "kubernetes" {}
+
+        telemetry {
+          prometheus_retention_time = "30s"
+          disable_hostname          = true
+        }
+
+        api_addr     = "https://$(POD_IP):8200"
+        cluster_addr = "https://$(HOSTNAME).vault-internal:8201"
+        ui           = true
+
+    replicas: 1
+
+  # D4 — SOFT anti-affinity, and the honest consequence.
+  #
+  # There are 2 workers and 3 replicas. HARD anti-affinity would leave one pod
+  # permanently Pending. Soft schedules them, and two peers therefore SHARE a
+  # node. Losing that node costs quorum.
+  #
+  # The honest framing, which belongs in the runbook verbatim: this cluster runs
+  # Raft to EXERCISE Raft, not to achieve availability. A third worker is the
+  # fix, and it is a capacity item, not a configuration one.
+  #
+  # Phase A4 step 5 requires recording WHICH node ends up with two peers.
+  affinity: |
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: {{ template "vault.name" . }}
+                app.kubernetes.io/instance: "{{ .Release.Name }}"
+                component: server
+
+  # NOT the chart default — set deliberately. The chart's default readiness probe
+  # is `exec: vault status -tls-skip-verify`, which marks a SEALED pod NOT READY
+  # and bypasses TLS verification (Rule 3). `path` is a supported but undefaulted
+  # chart key (commented out in its values.yaml); when set, the template renders
+  # an httpGet probe instead — verified against chart 0.34.1's template.
+  #
+  # `sealedcode=204` makes a SEALED POD PASS READINESS. Deliberate: Kubernetes must
+  # not drop a pod that is merely waiting to be unsealed. It is also why a sealed
+  # follower is invisible — and with vault-monitoring parked (no Prometheus
+  # Operator on this cluster), nothing alerts on it. See seal-unseal.md.
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+
+  # Liveness MUST also treat sealed and uninitialised as alive. /v1/sys/health
+  # returns 503 when sealed and 501 when uninitialised; a liveness probe that
+  # counted those as failures would KILL every sealed pod on a timer (~70s). A
+  # restarted peer could then never be unsealed — it would be restarted
+  # mid-unseal, come back sealed, and loop — and a fresh pod would be killed
+  # before `operator init` finished. That is why many deployments leave liveness
+  # off entirely; here it is on, but only with these codes, so it still catches a
+  # genuinely hung process. (An earlier version of this file omitted them.)
+  livenessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+    initialDelaySeconds: 60
+
+  # D8 — exposure is our own Services. No ingress: ssl-passthrough is off on this
+  # cluster and Vault terminates its own TLS anyway, so an ingress would be a
+  # proxy with no job.
+  ingress:
+    enabled: false
+
+  service:
+    enabled: true

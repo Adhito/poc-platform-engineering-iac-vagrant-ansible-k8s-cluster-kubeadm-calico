@@ -1,0 +1,38 @@
+# Phase A7 step 2 — schema + demo data so Level 3 has something real to SELECT.
+#
+# Files in /docker-entrypoint-initdb.d run once, on first initialisation of an
+# empty data directory. They do NOT re-run against an existing volume — so
+# editing this after the first sync has no effect until the PVC is deleted.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-seed
+  namespace: poc-hashicorp-vault-application
+data:
+  01-seed.sql: |
+    -- Demo table for Stage B Level 3. The dynamic role Vault creates is granted
+    -- SELECT on it, so "the credentials work" is provable with a real query.
+    --
+    -- NAMED `demo` ON PURPOSE. Neither PRD names this table — A7 step 2 just
+    -- says "a demo table" — but Stage B's Level 3 reads it from a DEMO_TABLE
+    -- env var defaulting to `demo`. Matching that default means Level 3 works
+    -- with no configuration and no chance of a mismatch, which would surface
+    -- as a 42P01 that looks like a credential problem.
+    CREATE TABLE IF NOT EXISTS demo (
+      id          SERIAL PRIMARY KEY,
+      name        TEXT        NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    INSERT INTO demo (name) VALUES
+      ('widget-alpha'),
+      ('widget-beta'),
+      ('widget-gamma')
+    ON CONFLICT DO NOTHING;
+
+    -- Vault's `creation_statements` grant SELECT on tables that exist AT THAT
+    -- MOMENT. Without this, any table added later would be invisible to every
+    -- subsequently-issued dynamic role — which looks like a Vault bug and is a
+    -- PostgreSQL default-privileges gap.
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT SELECT ON TABLES TO PUBLIC;

@@ -2,3 +2,7 @@
 argocd_version: ""
 argocd_namespace: argocd
 configs_path: /vagrant/configs
+# Ingress hostname label (the part before the .<lb-ip>.nip.io). Convention: prefix every utility
+# tool's ingress host with "infra-utility-" so they group/sort together and are easy to recall.
+# Full URL becomes https://{{ argocd_ingress_host }}.<lb-ip>.nip.io
+argocd_ingress_host: infra-utility-argocd

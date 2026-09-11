@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vault
+
+resources:
+  - ../../../base/monitoring
+
+# ############################################################################
+# TODO(A0.5 check 5b): SET THE REAL DISCOVERY LABEL HERE.
+#
+# Both objects carry a placeholder `release: kube-prometheus-stack`. Prometheus
+# only discovers ServiceMonitors and PrometheusRules matching its own selector —
+# get this wrong and both objects apply cleanly, report no error, and are never
+# loaded. Find the truth with:
+#
+#   kubectl get prometheus -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.spec.serviceMonitorSelector}{"\t"}{.spec.ruleSelector}{"\n"}{end}'
+#
+# Then uncomment and correct the labels block below.
+#
+# This cluster runs Grafana LGTM, whose metrics store is Mimir — it may not run
+# the Prometheus Operator at all. If check 5a shows the CRDs are absent, do not
+# sync this child; report the finding instead of editing their scrape config.
+# ############################################################################
+# labels:
+#   - pairs:
+#       release: <actual-prometheus-release-label>
+#     includeSelectors: false
