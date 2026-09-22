@@ -26,17 +26,18 @@ All in git. Nothing floats.
 |---|---|---|
 | Vault Helm chart | `0.34.1` | `argocd/applications/vault.yaml` → `targetRevision` |
 | Vault image | `2.0.4` | `helm/vault/values-onprem.yaml` → `server.image.tag` |
-| cert-manager | `v1.18.6` — **EOL** | `base/cert-manager/` (A0, applied directly, not via ArgoCD) |
-| External Secrets Operator | `0.13.0` — **EOL** | `argocd/applications/external-secrets.yaml` |
+| cert-manager | `v1.21.2` | `base/cert-manager/` (A0, applied directly, not via ArgoCD) |
+| External Secrets Operator | `2.11.0` | `argocd/applications/external-secrets.yaml` |
 | local-path-provisioner | `v0.0.37` | `base/local-path-provisioner/` (A0, applied directly) |
 | PostgreSQL | `16.15-alpine` | `base/postgres/statefulset.yaml` |
 
-Each is the newest release that still supports this cluster's Kubernetes 1.29,
-verified 2026-09-11. The two marked **EOL** are forced by that version gate —
-upgrading Kubernetes is what makes supported versions possible for them.
+Each is on a supported line for this cluster's Kubernetes 1.36, verified
+2026-09-22. (On 1.29, cert-manager and ESO were forced onto end-of-life lines;
+the rebuild removed that.) ESO's support window is one release (~3 weeks), so
+it is the pin most likely to be stale when you read this.
 
-**These were chosen for Kubernetes 1.29 compatibility, not because they are
-current.** Verify against upstream release notes at implementation time — the
+**These were chosen for Kubernetes 1.36 compatibility.** Verify against upstream
+release notes at implementation time — the
 PRDs deliberately omit version numbers because anything written there is stale by
 the time it runs.
 
@@ -177,14 +178,18 @@ kubectl get certificate -A     # check nothing is about to renew
 
 Bump `targetRevision` in `argocd/applications/external-secrets.yaml`.
 
-**Check the API version before bumping.** `ClusterSecretStore` is currently
-`external-secrets.io/v1beta1`, because ESO `0.13.0` (the newest line for
-Kubernetes 1.29) serves `v1beta1` as its storage version. The ESO releases that
-serve `v1` need a newer Kubernetes, so this bump rides with the Kubernetes
-upgrade. Moving to `v1` is then a one-line change in
-`base/external-secrets/clustersecretstore.yaml` — but confirm the CRD is served
-(`kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.spec.versions[*].name}'`)
-before changing the manifest, or the sync fails on an unknown kind.
+**Check the API version before bumping.** `ClusterSecretStore` is
+`external-secrets.io/v1`; ESO 2.11 still ships the `v1beta1` schema but with
+`served: false`. Before any bump, confirm the target release still serves the
+version the manifest uses, or the sync fails on an unknown kind:
+
+```bash
+kubectl get crd clustersecretstores.external-secrets.io \
+  -o jsonpath='{range .spec.versions[*]}{.name}{" served="}{.served}{"\n"}{end}'
+```
+
+Also check the target's Kubernetes range in ESO's support table — it is tight
+(2.11 lists only 1.36), so a Kubernetes minor bump usually needs an ESO bump too.
 
 ESO going down does not break already-materialised Kubernetes Secrets; it stops
 them refreshing. Level 1 keeps working on stale data, which is exactly the
@@ -207,11 +212,15 @@ let it re-initialise from `base/postgres/seed-configmap.yaml`, and re-run
 
 ### Kubernetes itself
 
-**Outstanding: the control plane is on v1.29.15 (kubelets v1.29.0) and P2 requires ≥ 1.32.** Recorded as a
-failed A0 gate in [`../environment.md`](../environment.md).
+**1.29 → 1.36 was done by rebuild, not in place** (2026-09-22), before Vault was
+deployed — see [`../environment.md`](../environment.md) and the cluster repo's
+[`documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md`](../../../../documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
+A rebuild is **not an option once Vault holds state**: it destroys the Raft data
+and the seal. From here on, Kubernetes upgrades are in place, one minor at a
+time (`kubeadm upgrade`), with Vault running.
 
 It is a coordination item, not a unilateral one — the cluster is shared with the
-observability and tracing-poc teams. When it happens:
+observability and tracing-poc teams. For each in-place minor upgrade:
 
 - Every node drain restarts Vault pods, and **each comes back sealed**. Plan
   unsealing into the upgrade window; do not discover it mid-drain.

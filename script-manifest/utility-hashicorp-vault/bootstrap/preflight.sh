@@ -139,8 +139,8 @@ K8S_MINOR="$(kubectl version -o json 2>/dev/null | jq -r '.serverVersion.minor /
 if [[ "$K8S_MINOR" =~ ^[0-9]+$ ]] && (( K8S_MINOR >= 32 )); then
   ok_ "Kubernetes ${K8S_VER} (P2 satisfied)"
 else
-  warn_ "Kubernetes ${K8S_VER} — P2 wants >= 1.32"
-  note_ "KNOWN failed gate, accepted deliberately. Pins target 1.29 compatibility."
+  bad_ "Kubernetes ${K8S_VER} — P2 wants >= 1.32"
+  note_ "Pins target 1.36 (cert-manager 1.21 needs >= 1.33, ESO 2.11 is tested on 1.36). Rebuild per documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md."
 fi
 record "Kubernetes version: \`${K8S_VER}\`"
 record ""
@@ -380,8 +380,8 @@ printf '%s\n' "$FINDINGS" >&2
 cat >&2 <<'EOF'
   ---------------------------------------------------------
 
-  WARN is not always a blocker: Kubernetes 1.29 and a missing Alertmanager are
-  both known, accepted deviations. FAIL means a deploy will fail or, worse,
+  WARN is not always a blocker: a missing Alertmanager is a known, accepted
+  deviation. FAIL means a deploy will fail or, worse,
   report Synced while nothing actually runs.
 EOF
 

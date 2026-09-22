@@ -89,11 +89,15 @@ patched in at the overlay, not baked into the base.
 ## Before this can be applied — Phase A0 status
 
 These are **not** optional polish. Several will silently half-work if skipped.
-Status as of the 2026-09-11 preflight run:
+Status as of the 2026-09-11 preflight run, on the old 1.29 cluster:
+
+> **The cluster is being rebuilt on Kubernetes 1.36** (see section 1). The rebuild wipes
+> everything marked ✅ *installed / created / applied* below — items 2, 8 and 10 must be
+> redone, then re-run `bootstrap/preflight.sh` to refresh this table.
 
 | # | Item | Where it lands | Status |
 |---|---|---|---|
-| 1 | **Kubernetes ≥ 1.32** (P2) — control plane **v1.29.15**, kubelets v1.29.0 | cluster | ❌ **Failed gate — risk accepted** by the owner; see below |
+| 1 | **Kubernetes ≥ 1.32** (P2) — was v1.29.15; **rebuilding on v1.36.4** | cluster | ⏳ **Pending rebuild** — see below |
 | 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed** — StorageClass `local-path`, *not* default |
 | 3 | MetalLB VIP for Vault | `overlays/onprem` | ✅ `192.168.56.241` confirmed free |
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
@@ -104,21 +108,28 @@ Status as of the 2026-09-11 preflight run:
 | 9 | **cert-manager** | cluster | ❌ **Not installed** — pinned in `base/cert-manager/`, awaiting the owner's go |
 | 10 | Namespaces | cluster | ✅ Applied |
 
-### 1 — Kubernetes 1.29 (failed A0 gate, risk accepted)
+### 1 — Kubernetes 1.36 (P2 gate — resolved by the rebuild)
 
-PRD P2 requires ≥ 1.32 and says *"bump if still on 1.29 (EOL)"*. The control plane runs
-**v1.29.15**; the kubelets run **v1.29.0**. The owner chose to stay and **accept the risk**,
-recorded as a failed gate rather than a passed one. Every pin is the **newest version that
-still supports 1.29**, verified against upstream on 2026-09-11 — and two of them are
-end-of-life *because of* the version gate:
+PRD P2 requires ≥ 1.32 and says *"bump if still on 1.29 (EOL)"*. The cluster was on
+v1.29.15 (kubelets v1.29.0). On 2026-09-11 the owner first chose to stay and accept the
+risk, which forced cert-manager and ESO onto end-of-life lines. On 2026-09-22 that was
+reversed: **the cluster is rebuilt on Kubernetes 1.36.4** — the newest minor every
+component below supports (1.37 was four weeks old and not yet in cert-manager's or
+Calico's matrices). Procedure: [`documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md`](../../documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
 
-| Component | Pinned | On K8s 1.29 |
+Pins, verified against each project's support matrix on 2026-09-22:
+
+| Component | Pinned | On K8s 1.36 |
 |---|---|---|
-| cert-manager | `v1.18.6` | ⚠️ newest line for 1.29 — **EOL since 2026-03-10** |
+| cert-manager | `v1.21.2` | ✅ 1.21 supports 1.33–1.36 |
 | Vault Helm chart | `0.34.1` (Vault `2.0.4`) | ✅ chart declares K8s ≥ 1.20 |
-| External Secrets Operator | `0.13.0` | ⚠️ newest line for 1.29 — **EOL since 2025-02-04** |
-| local-path-provisioner | `v0.0.37` | ✅ |
+| External Secrets Operator | `2.11.0` | ✅ 2.11 supports 1.36 — **short support window**, see below |
+| local-path-provisioner | `v0.0.37` | ✅ still the latest release |
 | PostgreSQL | `16.15-alpine` | ✅ current 16.x patch |
+
+ESO ships a minor roughly every three weeks, and each is supported only until the next. So
+`2.11.0` will be "EOL" within weeks. Plan for that: bump it deliberately when you next touch
+the platform, not the moment it lapses.
 
 > Vault's storage format is version-sensitive and **downgrades are not supported** — the
 > version is settled before `operator init`, not after. Vault 2.0 also changed how root
@@ -195,11 +206,11 @@ The Phase A0 prerequisites are applied **directly**, not through the root app �
 exist before ArgoCD creates anything that depends on them. In order:
 
 ```bash
-# storage — done 2026-09-11
+# storage — done 2026-09-11 on the 1.29 cluster; REDO after the 1.36 rebuild
 kubectl apply -k script-manifest/utility-hashicorp-vault/base/local-path-provisioner
-# namespaces — done 2026-09-11
+# namespaces — done 2026-09-11 on the 1.29 cluster; REDO after the 1.36 rebuild
 kubectl apply -k script-manifest/utility-hashicorp-vault/base/namespaces
-# cert-manager v1.18.6 (EOL — see section 1); --server-side for its large CRDs
+# cert-manager v1.21.2; --server-side for its large CRDs
 kubectl apply --server-side -k script-manifest/utility-hashicorp-vault/base/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
 # the issuer chain — only once the webhook is serving, or the apply is rejected
