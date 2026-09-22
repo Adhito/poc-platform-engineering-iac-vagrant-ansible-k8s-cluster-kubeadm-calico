@@ -20,6 +20,7 @@ ANSIBLE_EXTRA_VARS = {
   "kubernetes_version"       => settings["software"]["kubernetes"],
   "kubernetes_version_short" => settings["software"]["kubernetes"][0..3],
   "calico_version"           => settings["software"]["calico"],
+  "metrics_server_version"   => settings["software"]["metrics_server"],
   "dashboard_version"        => settings["software"]["dashboard"] || "",
   "argocd_version"           => settings["software"]["argocd"] || "",
   "headlamp_version"         => settings["software"]["headlamp"] || "",

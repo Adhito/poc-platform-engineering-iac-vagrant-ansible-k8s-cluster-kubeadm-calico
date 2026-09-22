@@ -15,16 +15,19 @@
     state: directory
     mode: '0755'
 
+# CRI-O's minor must match the kubelet's, so the repo is derived from kubernetes_version_short
+# (e.g. v1.36) rather than pinned separately. CRI-O left pkgs.k8s.io for openSUSE's build service;
+# the old pkgs.k8s.io prerelease:/main channel is unpinned and stale.
 - name: Download CRI-O GPG key
   ansible.builtin.shell:
     cmd: >
-      curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/Release.key |
+      curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/v{{ kubernetes_version_short }}/deb/Release.key |
       gpg --dearmor -o {{ crio_keyring_path }}
     creates: "{{ crio_keyring_path }}"
 
 - name: Add CRI-O apt repository
   ansible.builtin.copy:
-    content: "deb [signed-by={{ crio_keyring_path }}] https://pkgs.k8s.io/addons:/cri-o:/prerelease:/main/deb/ /\n"
+    content: "deb [signed-by={{ crio_keyring_path }}] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/v{{ kubernetes_version_short }}/deb/ /\n"
     dest: /etc/apt/sources.list.d/cri-o.list
     mode: '0644'
 

@@ -46,11 +46,21 @@ nodes:
 #     vm_path: /vagrant/images
 software:
   box: bento/ubuntu-22.04
-  calico: 3.28.0
-  # To skip the dashboard installation, set its version to an empty value or comment it out:
+  # Versions verified against each project's compatibility matrix for Kubernetes 1.36 on 2026-09-22.
+  # Calico 3.32 is tested on K8s 1.34-1.36.
+  calico: 3.32.2
+  # To skip the dashboard installation, set its version to an empty value or comment it out.
+  # NOTE: upstream archived the Dashboard in Jan 2026 (Headlamp is the successor). Left as-is pending
+  # its own ticket. Its components manifest also re-applies a bundled metrics-server v0.7.1 over the
+  # one pinned below - see documents/DOCUMENTS-backlog.md.
   dashboard: 2.7.0
-  kubernetes: 1.29.0-*
-  argocd: 2.14.8
+  # CRI-O follows this minor automatically (its apt repo is derived from it) - never set it separately.
+  kubernetes: 1.36.4-*
+  # metrics-server 0.9.x supports K8s 1.34+.
+  metrics_server: 0.9.0
+  # Argo CD 3.5 is tested on K8s 1.33-1.36. 3.x changed defaults vs 2.14 - see
+  # documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md before rebuilding a shared cluster.
+  argocd: 3.5.3
   # To skip Headlamp installation, set its version to an empty value or comment it out:
   headlamp: 0.26.0
   # To skip MetalLB/ingress-nginx installation, set either version to an empty value or comment it out.
