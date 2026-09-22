@@ -1,2 +1,7 @@
 ---
 configs_path: /vagrant/configs
+# Fallback; the real value comes from Vagrantfile extra_vars (settings.yaml).
+control_ip: "192.168.56.10"
+# kubeadm bootstrap tokens live 24h - refuse a join command older than this.
+join_command_max_age_hours: 23
+join_api_wait_seconds: 120

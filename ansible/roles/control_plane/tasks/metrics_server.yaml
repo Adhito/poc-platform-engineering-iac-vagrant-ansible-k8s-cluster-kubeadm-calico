@@ -1,7 +1,20 @@
 ---
+# Pinned upstream release (was an unpinned third-party copy of v0.7.2).
+- name: Download metrics-server manifest
+  ansible.builtin.get_url:
+    url: "https://github.com/kubernetes-sigs/metrics-server/releases/download/v{{ metrics_server_version }}/components.yaml"
+    dest: /tmp/metrics-server.yaml
+    mode: '0644'
+
+# kubeadm's kubelet serving certs are self-signed, so metrics-server cannot verify them.
+- name: Allow metrics-server to scrape kubelets with self-signed certs
+  ansible.builtin.lineinfile:
+    path: /tmp/metrics-server.yaml
+    line: "        - --kubelet-insecure-tls"
+    insertafter: '^\s+- --metric-resolution='
+
 - name: Apply metrics-server manifest
-  ansible.builtin.command: >
-    kubectl apply -f https://raw.githubusercontent.com/techiescamp/kubeadm-scripts/main/manifests/metrics-server.yaml
+  ansible.builtin.command: kubectl apply -f /tmp/metrics-server.yaml
   environment:
     KUBECONFIG: /root/.kube/config
   changed_when: true

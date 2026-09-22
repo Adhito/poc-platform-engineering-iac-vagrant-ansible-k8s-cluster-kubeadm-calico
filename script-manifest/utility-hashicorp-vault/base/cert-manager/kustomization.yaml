@@ -1,14 +1,9 @@
-# Phase A0 step 6 — cert-manager, pinned to v1.18.6 (2026-02-24).
+# Phase A0 step 6 — cert-manager, pinned to v1.21.2.
 #
-# ############################################################################
-# THIS IS AN END-OF-LIFE RELEASE, INSTALLED DELIBERATELY.
-#
-# cert-manager 1.18 is the newest line that supports Kubernetes 1.29, and it
-# reached end of life on 2026-03-10. The cluster owner chose to stay on 1.29 and
-# accept that risk (recorded in the vault repo's documents/troubleshooting.md).
-# Move to a supported line as part of the Kubernetes upgrade — this component
-# issues Vault's TLS, so running it unpatched is not a small thing.
-# ############################################################################
+# 1.21 is the current line (released 2026-07-08) and supports Kubernetes
+# 1.33-1.36, verified 2026-09-22 for this cluster's 1.36. It stays supported
+# until cert-manager 1.23 ships — check before the next Kubernetes minor, since
+# this component issues Vault's TLS.
 #
 # Applied directly as an A0 prerequisite, NOT through root-platform — wave 0's
 # Certificate needs these CRDs to exist before ArgoCD creates it:
@@ -24,4 +19,4 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - https://github.com/cert-manager/cert-manager/releases/download/v1.18.6/cert-manager.yaml
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml

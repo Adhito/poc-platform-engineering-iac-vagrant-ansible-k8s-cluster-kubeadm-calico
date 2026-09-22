@@ -21,12 +21,12 @@ Provision Kubernetes Cluster (K8S) systematically using Infrastructure as Code �
 This project provides a fully automated Kubernetes cluster deployment that includes:
 
 - **Multi-node cluster**: 1 control plane node + 2 worker nodes (configurable)
-- **Container Runtime**: CRI-O for OCI-compliant container management
-- **Network Plugin**: Calico v3.28.0 for pod networking and network policies
-- **Kubernetes Version**: 1.29.0
-- **Monitoring**: Kubernetes Dashboard v2.7.0 with admin access
-- **GitOps**: ArgoCD v2.14.8 for continuous deployment
-- **Metrics**: Metrics Server for resource monitoring
+- **Container Runtime**: CRI-O (same minor as Kubernetes, e.g. 1.36.x) for OCI-compliant container management
+- **Network Plugin**: Calico v3.32.2 for pod networking and network policies
+- **Kubernetes Version**: 1.36.4
+- **Monitoring**: Kubernetes Dashboard v2.7.0 with admin access (upstream archived Jan 2026 — see [backlog](documents/DOCUMENTS-backlog.md))
+- **GitOps**: ArgoCD v3.5.3 for continuous deployment
+- **Metrics**: Metrics Server v0.9.0 for resource monitoring
 - **Dashboard Alternative**: Headlamp v0.26.0 lightweight Kubernetes UI
 - **Load Balancing**: MetalLB for bare-metal `LoadBalancer` services on the hostonly network
 - **Ingress**: ingress-nginx, exposing ArgoCD at a `nip.io` hostname alongside its NodePort
@@ -79,7 +79,7 @@ Ensure you have the following software installed on your host machine:
    - Download: https://www.vagrantup.com/downloads
    - Automates VM lifecycle management
 
-3. **kubectl** (1.29 or compatible)
+3. **kubectl** (1.35–1.37, i.e. within one minor of the cluster's 1.36)
    - Download: https://kubernetes.io/docs/tasks/tools/
    - Kubernetes command-line tool
 
@@ -158,9 +158,9 @@ kubectl get nodes
 
 # Expected output:
 # NAME               STATUS   ROLE           AGE   VERSION
-# devnodemaster01    Ready    control-plane  5m    v1.29.0
-# devnodeworker01    Ready    worker         4m    v1.29.0
-# devnodeworker02    Ready    worker         3m    v1.29.0
+# devnodemaster01    Ready    control-plane  5m    v1.36.4
+# devnodeworker01    Ready    worker         4m    v1.36.4
+# devnodeworker02    Ready    worker         3m    v1.36.4
 
 # Check all pods
 kubectl get pods -A
@@ -195,10 +195,11 @@ nodes:
 
 software:
   box: bento/ubuntu-22.04          # Base OS image
-  calico: 3.28.0                   # Calico CNI version
+  calico: 3.32.2                   # Calico CNI version
   dashboard: 2.7.0                 # K8s Dashboard version
-  kubernetes: 1.29.0-*             # Kubernetes version
-  argocd: 2.14.8                   # ArgoCD version
+  kubernetes: 1.36.4-*             # Kubernetes version (CRI-O follows its minor)
+  metrics_server: 0.9.0            # metrics-server version
+  argocd: 3.5.3                    # ArgoCD version
   metallb: 0.14.9                  # MetalLB version
   ingress_nginx: 1.11.3            # ingress-nginx controller version
 ```
@@ -387,6 +388,18 @@ kubectl get pods -A
 interruption): see [documents/DOCUMENTS-runbook-node-recovery.md](documents/DOCUMENTS-runbook-node-recovery.md)
 for the full diagnose → safe reboot → rebuild → cross-project fixup sequence.
 
+**Moving the cluster to a new Kubernetes version** (e.g. the 1.29 → 1.36 rebuild): see
+[documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md](documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
+
+**VMs take ~20 minutes to boot, or freeze mid-provision** (`Timed out while waiting for the
+machine to boot`, `The SSH connection was unexpectedly closed`) on a Windows host. VirtualBox is
+running in Hyper-V "snail mode" because the Windows hypervisor is on: look for `Snail execution
+mode is active!` in the VM's `Logs\VBox.log`. Turn off **both** Memory Integrity and
+`hypervisorlaunchtype` (Administrator PowerShell: `bcdedit /set hypervisorlaunchtype off`), then
+restart. `bcdedit` alone isn't enough while Memory Integrity is on. This disables WSL2 until
+reversed. Details are in the rebuild runbook's
+[What went wrong on the first run](documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md#what-went-wrong-on-the-first-run).
+
 ### Common Issues
 
 **Issue**: VMs fail to start with network errors
@@ -512,6 +525,9 @@ poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/
 ├── scripts-setup/                           # Utility shell scripts (post-provision helpers)
 │   └── setup-refresh-token.sh              # Refresh expired Dashboard/Headlamp tokens
 └── documents/                                # Operational runbooks
+    ├── DOCUMENTS-argocd-ingress.md         # ArgoCD nip.io Ingress access
+    ├── DOCUMENTS-backlog.md                # Known issues deferred on purpose (e.g. ingress-nginx retirement)
+    ├── DOCUMENTS-runbook-cluster-upgrade-1-36.md  # 1.29 → 1.36 rebuild on a shared cluster
     └── DOCUMENTS-runbook-node-recovery.md  # Recovering an unresponsive/unbootable node VM
 ```
 

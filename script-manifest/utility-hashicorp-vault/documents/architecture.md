@@ -281,8 +281,6 @@ All logged in the vault repo's `documents/troubleshooting.md`.
 | Divergence | Why |
 |---|---|
 | **Stage A lives in the cluster repo**, not the vault repo (against D18) | Stage A is platform work owned by this repo. Cost: cross-stage references are now cross-repo |
-| **Kubernetes 1.29**, not ≥ 1.32 (P2) | Recorded as a **failed gate**, designed around. Shared cluster — the upgrade is a coordination item |
-| `ClusterSecretStore` uses **`v1beta1`**, not `v1` | The `v1` API needs a newer ESO than 1.29 compatibility allows |
 | ESO reads the CA from the **`vault-tls` Secret**, not a copied ConfigMap | A ClusterSecretStore is cluster-scoped, so the copy is avoidable — and a copied CA goes stale on rotation |
 | ServiceMonitor targets **`vault-internal`** (headless), not `vault` | The chart's Services share labels; selecting `vault` matches several and double-scrapes. Headless gives one target per peer, which is what per-peer seal status needs |
 | Demo table named **`demo`** | Neither PRD names it; Stage B's Level 3 defaults `DEMO_TABLE=demo`. Matching removes a mismatch that would surface as a credential-looking error |

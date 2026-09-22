@@ -26,14 +26,20 @@ it by that repo and path, not as a local `documents/environment.md`.
 
 Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refresh.
 
+> **Stale after the 1.36 rebuild.** Apart from the Kubernetes and ArgoCD rows, this table is
+> the 2026-09-11 preflight of the old Kubernetes 1.29 cluster. The cluster was rebuilt on
+> 1.36.4 on 2026-09-22 (see *Kubernetes version* below); re-run preflight and replace it. Node
+> names and IPs carried over. Everything that was installed on the cluster did not — the
+> MetalLB pool returns only when the observability team re-bootstraps its ArgoCD apps.
+
 | Value | Status | Blocks |
 |---|---|---|
 | Node names and IPs | ✅ | — |
-| Kubernetes version | ✅ `v1.29.15` | **A0 gate — fails P2** |
+| Kubernetes version | ✅ `v1.36.4` on all nodes (rebuilt 2026-09-22; was `v1.29.15`) | — |
 | MetalLB pool and existing allocations | ✅ | — |
 | MetalLB VIP for Vault | ✅ `192.168.56.241` — free | — |
 | NodePort `30004` | ✅ free | — |
-| ArgoCD version | ✅ `v2.14.8` — multi-source supported (≥ 2.6) | — |
+| ArgoCD version | ✅ `v3.5.3` (was `v2.14.8`) — multi-source supported (≥ 2.6) | — |
 | **ArgoCD credential for this repo** | ❌ **absent** — only the OTel Helm repo is registered | **A1** — every child fails to fetch |
 | Cluster OIDC issuer | ✅ `https://kubernetes.default.svc.cluster.local` | — |
 | **StorageClass** | ❌ **none exists at all** — `local-path-provisioner` never installed | **A2** — Vault and Postgres PVCs |
@@ -54,8 +60,8 @@ Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refr
 | Lab environment | `learning-labs-developer-workspace-type-01` |
 | Kubernetes cluster repo | `poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico` |
 | Provisioning | Vagrant + Ansible (`ansible_local`), kubeadm |
-| CNI | Calico v3.28.0 |
-| Container runtime | CRI-O |
+| CNI | Calico v3.32.2 (was v3.28.0 on 1.29) |
+| Container runtime | CRI-O 1.36.6 — same minor as the kubelet (was a stale, unpinned 1.33.0 on 1.29) |
 | Pod CIDR / Service CIDR | `172.16.1.0/16` / `172.17.1.0/18` |
 
 > The PRD's header says "Target cluster: `learning-labs-developer-workspace-type-01`".
@@ -76,36 +82,45 @@ Verified with `kubectl get nodes -o wide`.
 with *soft* anti-affinity, so two peers share a worker. See
 [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) for the consequence.
 
-### Kubernetes version ✅ — and this is a failed gate
+### Kubernetes version ✅ — rebuilt on 1.36
 
 ```
-control plane (API server)   v1.29.15
-kubelets                     v1.29.0     (settings.yaml apt pin 1.29.0-*)
+before (2026-09-11)   control plane v1.29.15, kubelets v1.29.0   — fails P2
+now    (2026-09-22)   control plane + kubelets v1.36.4           (settings.yaml apt pin 1.36.4-*)
 ```
 
-P2 requires **≥ 1.32** and says to bump if still on 1.29 (EOL). It has not been
-bumped. The owner chose to **stay and accept the risk**, recorded as a failed
-gate rather than a passed one (Rule 4): the cluster is shared with the
-observability and tracing-poc teams, so the upgrade is a coordination item rather
-than a unilateral one. The kubelet/control-plane skew is within Kubernetes'
-support policy — but it does mean the control plane was patch-upgraded and the
-kubelets were not.
+P2 requires **≥ 1.32** and says to bump if still on 1.29 (EOL). On 2026-09-11 the
+owner chose to stay and accept the risk; on 2026-09-22 that was reversed. The
+cluster is **rebuilt** (`vagrant destroy` + `vagrant up`), not upgraded in place:
+kubeadm moves one minor at a time, so 1.29 → 1.36 in place is seven upgrades,
+and the cluster holds no persistent data worth that. It is shared with the
+observability and tracing-poc teams, so the rebuild is scheduled with them —
+procedure in the cluster repo's
+[`documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md`](../../../documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
 
-Every Stage A component is pinned to the **newest version that supports 1.29**,
-verified against upstream on 2026-09-11:
+**Why 1.36 and not 1.37:** 1.37 was four weeks old and not yet in cert-manager's
+or Calico's support matrices. 1.35 would have reached end of life in Feb 2027;
+1.36 is supported until June 2027.
 
-| Component | Pin | On K8s 1.29 |
+Every Stage A component is pinned to a supported line for 1.36, verified against
+upstream on 2026-09-22:
+
+| Component | Pin | On K8s 1.36 |
 |---|---|---|
-| cert-manager | `v1.18.6` | ⚠️ newest line for 1.29 — **EOL since 2026-03-10** |
+| cert-manager | `v1.21.2` | ✅ 1.21 supports 1.33–1.36 |
 | Vault Helm chart | `0.34.1` (Vault `2.0.4`) | ✅ chart declares K8s ≥ 1.20 |
-| External Secrets Operator | `0.13.0` | ⚠️ newest line for 1.29 — **EOL since 2025-02-04** |
-| local-path-provisioner | `v0.0.37` | ✅ |
+| External Secrets Operator | `2.11.0` | ✅ 2.11 supports 1.36 — each minor is supported only until the next (~3 weeks) |
+| local-path-provisioner | `v0.0.37` | ✅ still the latest release |
 | PostgreSQL | `16.15-alpine` | ✅ current 16.x patch |
 
-**Two of these are end-of-life because of the version gate, not by choice.** That
-is the concrete cost of staying on 1.29, and the strongest argument for the
-upgrade: it is what unlocks a supported cert-manager — the component that issues
-Vault's TLS — and a supported ESO.
+The upgrade removed both end-of-life pins that 1.29 forced, and let the
+`ClusterSecretStore` move to `external-secrets.io/v1` as the PRD specifies.
+
+**Known exception on the shared cluster:** the observability team's ingress-nginx
+is upstream-retired (March 2026), and its final release (v1.15.1) is tested only
+up to 1.35. It is kept deliberately for now and tracked in the cluster repo's
+[`documents/DOCUMENTS-backlog.md`](../../../documents/DOCUMENTS-backlog.md). Vault
+does not depend on it (D8 uses a MetalLB VIP and a NodePort).
 
 ---
 

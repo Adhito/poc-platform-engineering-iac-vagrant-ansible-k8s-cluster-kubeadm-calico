@@ -20,6 +20,7 @@ ANSIBLE_EXTRA_VARS = {
   "kubernetes_version"       => settings["software"]["kubernetes"],
   "kubernetes_version_short" => settings["software"]["kubernetes"][0..3],
   "calico_version"           => settings["software"]["calico"],
+  "metrics_server_version"   => settings["software"]["metrics_server"],
   "dashboard_version"        => settings["software"]["dashboard"] || "",
   "argocd_version"           => settings["software"]["argocd"] || "",
   "headlamp_version"         => settings["software"]["headlamp"] || "",
@@ -35,7 +36,9 @@ ANSIBLE_EXTRA_VARS = {
 }
 
 Vagrant.configure("2") do |config|
-  config.vm.boot_timeout = 600
+  # 30 min. With Hyper-V/VBS enabled on the Windows host, VirtualBox runs in NEM "snail
+  # execution mode" and a fresh node took ~21 min to reach SSH (2026-09-22). 600s timed out.
+  config.vm.boot_timeout = 1800
 
   if `uname -m`.strip == "aarch64"
     config.vm.box = settings["software"]["box"] + "-arm64"
@@ -94,7 +97,7 @@ Vagrant.configure("2") do |config|
 
   ## Stage : Provision & Setup Node-Worker
   (1..NUM_WORKER_NODES).each do |i|
-    config.vm.boot_timeout = 600
+    config.vm.boot_timeout = 1800
     config.vm.define "devnodeworker0#{i}" do |node|
       node.vm.hostname = "devnodeworker0#{i}"
       node.vm.network "private_network", ip: IP_NW + "#{IP_START + i}"

@@ -9,9 +9,10 @@
   changed_when: ns_result.rc == 0
   failed_when: ns_result.rc != 0 and 'AlreadyExists' not in ns_result.stderr
 
+# Server-side: Argo CD 3.x's CRDs exceed the annotation size limit of client-side apply.
 - name: Apply ArgoCD install manifest
   ansible.builtin.command: >
-    kubectl apply -n {{ argocd_namespace }}
+    kubectl apply --server-side --force-conflicts -n {{ argocd_namespace }}
     -f https://raw.githubusercontent.com/argoproj/argo-cd/v{{ argocd_version }}/manifests/install.yaml
   environment:
     KUBECONFIG: /home/vagrant/.kube/config

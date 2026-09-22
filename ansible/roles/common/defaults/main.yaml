@@ -1,7 +1,8 @@
 ---
 # Fallback defaults. Real values always come from Vagrantfile extra_vars (sourced from settings.yaml).
-kubernetes_version: "1.29.0-*"
-kubernetes_version_short: "1.29"
+kubernetes_version: "1.36.4-*"
+# Also selects the CRI-O apt repo (isv:cri-o:stable:v<short>), keeping CRI-O on the same minor.
+kubernetes_version_short: "1.36"
 dns_servers:
   - 8.8.8.8
   - 1.1.1.1

@@ -1,0 +1,40 @@
+---
+# Guards before `kubeadm join`. Without them, a stale configs/setup-join.sh (e.g. left over
+# from a previous cluster, or a join command whose token has expired) or a control plane that
+# never came up both surface as kubeadm's misleading "no route to host" after a 5-minute wait.
+# Seen on 2026-09-22 during the 1.29 -> 1.36 rebuild.
+
+- name: Check the join command written by the control plane
+  ansible.builtin.stat:
+    path: "{{ configs_path }}/setup-join.sh"
+  register: join_file_stat
+
+- name: Refuse to join without a join command
+  ansible.builtin.fail:
+    msg: >-
+      {{ configs_path }}/setup-join.sh does not exist. Provision the control plane first
+      (vagrant provision devnodemaster01) - it writes this file.
+  when: not join_file_stat.stat.exists
+
+# kubeadm bootstrap tokens expire after 24h, so an older join command cannot work whichever
+# cluster it came from. The guest clock lags rather than leads the host's, which only ever
+# makes the file look younger - this check cannot fail spuriously on clock drift.
+- name: Refuse a join command older than its token lifetime
+  ansible.builtin.fail:
+    msg: >-
+      {{ configs_path }}/setup-join.sh is
+      {{ ((ansible_date_time.epoch | int - join_file_stat.stat.mtime | int) / 3600) | round(1) }}
+      hours old; kubeadm join tokens expire after 24h. It is stale - possibly from a previous
+      cluster. Run `vagrant provision devnodemaster01` to mint a fresh one, then re-provision
+      this worker.
+  when: (ansible_date_time.epoch | int - join_file_stat.stat.mtime | int) > (join_command_max_age_hours | int * 3600)
+
+- name: Wait for the control plane API to be reachable
+  ansible.builtin.wait_for:
+    host: "{{ control_ip }}"
+    port: 6443
+    timeout: "{{ join_api_wait_seconds }}"
+    msg: >-
+      Control plane API {{ control_ip }}:6443 not reachable after {{ join_api_wait_seconds }}s.
+      Is devnodemaster01 running and provisioned (kubeadm init done, eth1 up)? Check with
+      `vagrant status` and `vagrant ssh devnodemaster01 -c "sudo crictl ps"`.

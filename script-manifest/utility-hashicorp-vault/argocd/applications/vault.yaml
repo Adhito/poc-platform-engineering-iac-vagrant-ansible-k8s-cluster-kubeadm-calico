@@ -29,7 +29,7 @@ spec:
       chart: vault
       # D16 — pinned, never `latest`. Verified current stable on 2026-09-11:
       # chart 0.34.1 ships Vault 2.0.4 and declares kubeVersion ">= 1.20.0-0",
-      # so it runs on this cluster's 1.29. Vault 2.0 makes sys/generate-root and
+      # so it runs on this cluster's 1.36. Vault 2.0 makes sys/generate-root and
       # sys/rekey authenticated by default — kept deliberately; see
       # bootstrap/95-create-breakglass.sh for how recovery still works.
       targetRevision: 0.34.1
