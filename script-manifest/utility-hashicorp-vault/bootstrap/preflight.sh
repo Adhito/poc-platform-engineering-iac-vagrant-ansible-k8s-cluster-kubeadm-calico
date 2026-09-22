@@ -45,6 +45,8 @@ PVC_TEST=0
 PROPOSED_VIP="${VAULT_LB_IP:-192.168.56.241}"
 NODEPORT="30004"
 REPO_NAME="poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico"
+# The URL every Application here uses (argocd/). HTTPS, so a public repo needs no credential.
+REPO_URL="https://github.com/Adhito/${REPO_NAME}.git"
 
 N_PASS=0; N_FAIL=0; N_WARN=0; N_SKIP=0
 FINDINGS=""     # accumulates the environment.md paste block
@@ -267,8 +269,15 @@ if kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
   [[ -n "$ARGO_VER" ]] && note_ "argocd-server: ${ARGO_VER}  (multi-source needs >= 2.6)"
 
   REPO_SECRETS="$(kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository -o name 2>/dev/null | wc -l | tr -d ' ')"
-  if [[ "$REPO_SECRETS" == "0" ]]; then
-    bad_ "no repository credentials registered in ArgoCD"
+  # A public repo over HTTPS needs no credential at all. Probe anonymously (no prompt, no
+  # stored credentials) — this is what ArgoCD will do when no repository Secret matches.
+  if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true timeout 20 \
+       git -c credential.helper= ls-remote --heads "$REPO_URL" >/dev/null 2>&1; then
+    ok_ "repo is publicly readable over HTTPS — no ArgoCD credential needed"
+    note_ "$REPO_URL"
+    (( REPO_SECRETS > 0 )) && note_ "${REPO_SECRETS} repository credential(s) also registered (harmless)"
+  elif [[ "$REPO_SECRETS" == "0" ]]; then
+    bad_ "repo is not publicly readable and no repository credentials are registered in ArgoCD"
   else
     ok_ "${REPO_SECRETS} repository credential(s) registered"
     FOUND=0
@@ -317,7 +326,11 @@ else
   warn_ "5a: Prometheus Operator CRDs ABSENT"
   note_ "The stack is not operator-managed. Adding a scrape target would mean"
   note_ "EDITING a config that currently works — Rule 8 forbids it. STOP AND REPORT."
-  note_ "Remove vault-monitoring.yaml from argocd/applications/; the rest is fine."
+  if [[ -f "$(dirname "$0")/../argocd/applications/vault-monitoring.yaml" ]]; then
+    note_ "Remove vault-monitoring.yaml from argocd/applications/; the rest is fine."
+  else
+    note_ "Already handled: vault-monitoring is parked in argocd/disabled/."
+  fi
   record "A0.5 5a — operator-managed: **no** — A9.4 not possible additively"
 fi
 record ""
@@ -348,8 +361,10 @@ if kubectl get secret -n poc-hashicorp-vault-application postgres-admin >/dev/nu
   ok_ "Secret postgres-admin exists"
 else
   warn_ "Secret postgres-admin missing — the postgres pod will not start"
+  note_ "Create it via a 0600 temp file, never a command-line argument (README section 8):"
+  note_ "umask 077; f=\$(mktemp); openssl rand -base64 24 | tr -d '\\n' > \"\$f\""
   note_ "kubectl -n poc-hashicorp-vault-application create secret generic postgres-admin \\"
-  note_ "  --from-literal=POSTGRES_PASSWORD=\"\$(openssl rand -base64 24)\""
+  note_ "  --from-file=POSTGRES_PASSWORD=\"\$f\"; shred -u \"\$f\""
 fi
 
 # ===========================================================================

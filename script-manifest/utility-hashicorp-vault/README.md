@@ -103,7 +103,7 @@ Status as of the 2026-09-11 preflight run, on the old 1.29 cluster:
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
 | 5 | Prometheus operator-managed (A0.5 check 5a) | — | ✅ **No** — `vault-monitoring` parked in `argocd/disabled/` |
 | 6 | Cluster OIDC issuer | bootstrap | ✅ `https://kubernetes.default.svc.cluster.local` |
-| 7 | **ArgoCD repo credential** for this repo | ArgoCD config | ❌ **Absent** — the owner creates it; see below |
+| 7 | ArgoCD access to this repo | ArgoCD config | ✅ **Not needed** — the repo is public, and every Application uses its HTTPS URL; see below |
 | 8 | Postgres admin password Secret | cluster | ✅ Created — never in git (Rule 1) |
 | 9 | **cert-manager** | cluster | ❌ **Not installed** — pinned in `base/cert-manager/`, awaiting the owner's go |
 | 10 | Namespaces | cluster | ✅ Applied |
@@ -160,9 +160,12 @@ The remote is an SSH host alias:
 git@github.com-adhito909:Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
 ```
 
-ArgoCD cannot resolve `github.com-adhito909`. The `Application`s here use the HTTPS URL and
-need either a credential in ArgoCD or a deploy key with a plain SSH URL. The vault repo hit
-this identical problem in `root-applications.yaml` — same fix, both repos.
+ArgoCD cannot resolve `github.com-adhito909`, so the `Application`s here use the HTTPS URL.
+**The repo is public** (verified 2026-09-22: anonymous `git ls-remote` works, GitHub reports
+`"private": false`), so ArgoCD reads it anonymously and **no credential is needed**.
+`bootstrap/preflight.sh` probes anonymous access first, and falls back to checking for a
+credential only if the probe fails. If the repo is ever made private, register a
+credential or a deploy key; the vault repo's `root-applications.yaml` has the same concern.
 
 ### 8 — Postgres admin password ✅ done
 
