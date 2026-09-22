@@ -133,9 +133,7 @@ the private registry (`192.168.56.20:5000`). The observability project's fixup s
 both. See also [DOCUMENTS-runbook-node-recovery.md](DOCUMENTS-runbook-node-recovery.md).
 
 **Run it from inside the Dev VM, not from Windows.** On the host it fails immediately with
-`ssh-copy-id: ERROR: No identities found`. After a **full** rebuild, the Dev VM also still holds
-the old cluster's SSH host keys and kubeconfig, so clear those first. Its registry-trust playbook
-targets **all three nodes** (master included), so all three need the key:
+`ssh-copy-id: ERROR: No identities found`.
 
 ```bash
 # on the host, from the Dev VM's project:
@@ -143,19 +141,20 @@ cd "/c/Programming-Repository/Github - Adhito909/learning-labs-developer-workspa
 vagrant ssh
 ```
 ```bash
-# inside the Dev VM:
-# 1. forget the old nodes' host keys (the rebuilt nodes have new ones)
-for ip in 192.168.56.10 192.168.56.11 192.168.56.12; do ssh-keygen -R $ip; done
-# 2. trust the Dev VM key on every node (password: vagrant)
-for ip in 192.168.56.10 192.168.56.11 192.168.56.12; do ssh-copy-id vagrant@$ip; done
-# 3. replace the stale kubeconfig with the new cluster's (keeps a copy of the old one)
-cp ~/.kube/config ~/.kube/config.pre-1-36
-ssh vagrant@192.168.56.10 'cat ~/.kube/config' > ~/.kube/config
-kubectl get nodes
-# 4. run the fixup (its registry playbook covers all three nodes in one pass)
+# inside the Dev VM (one run covers all three nodes):
 cd ~/workspace-app/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry
-./scripts/utility-node-registry-recovery.sh 192.168.56.11 tracing-poc
+./scripts/utility-node-registry-recovery.sh 192.168.56.12 tracing-poc
 ```
+
+Since 2026-09-22 the script handles the full-rebuild case on its own:
+- **SSH trust on every inventory node**, not just the one you pass. Its registry playbook connects
+  to all three, so earlier a single-node run left the others `UNREACHABLE`.
+- **Stale host keys** for rebuilt nodes are replaced.
+- **A kubeconfig** that no longer reaches the cluster (new CA) is backed up and replaced with the
+  master's.
+
+It prompts for the `vagrant` password once per node that doesn't have the key yet, so expect
+three prompts after a full rebuild and none on a re-run.
 
 Its step 3 (clearing stuck `tracing-poc` pods) finds nothing on a fresh cluster. That's expected,
 because the namespace doesn't exist until the other teams re-bootstrap.

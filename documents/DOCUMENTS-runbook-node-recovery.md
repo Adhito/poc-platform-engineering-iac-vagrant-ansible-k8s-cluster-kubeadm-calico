@@ -127,14 +127,14 @@ vagrant ssh
 ```
 ```bash
 # inside the Dev VM:
-ssh-keygen -R 192.168.56.12      # the rebuilt node has a new host key; ssh-copy-id refuses otherwise
 cd ~/workspace-app/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry
 ./scripts/utility-node-registry-recovery.sh 192.168.56.12 tracing-poc   # password prompt: vagrant
 ```
 
-Its registry step runs against **all three nodes** in the Dev VM's inventory, so every node must
-already trust the Dev VM key. After rebuilding a *single* node that's just the rebuilt one. After a
-**full cluster rebuild**, do all three first and replace the Dev VM's kubeconfig as well. See
+The script checks SSH trust on **every** node in the Dev VM's inventory, because its registry
+step connects to all of them. It replaces a rebuilt node's stale host key and refreshes a
+kubeconfig that no longer reaches the cluster. It prompts for the password only where the key is
+missing. The same command therefore covers a single-node rebuild and a full cluster rebuild. See
 [DOCUMENTS-runbook-cluster-upgrade-1-36.md](DOCUMENTS-runbook-cluster-upgrade-1-36.md) step 5.
 
 If you (whoever is running this cluster-side recovery) don't have direct access to run this — **it
