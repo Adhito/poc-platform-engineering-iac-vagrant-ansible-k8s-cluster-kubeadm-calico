@@ -91,13 +91,13 @@ patched in at the overlay, not baked into the base.
 These are **not** optional polish. Several will silently half-work if skipped.
 Status as of the 2026-09-11 preflight run, on the old 1.29 cluster:
 
-> **The cluster is being rebuilt on Kubernetes 1.36** (see section 1). The rebuild wipes
-> everything marked ✅ *installed / created / applied* below — items 2, 8 and 10 must be
+> **The cluster was rebuilt on Kubernetes 1.36 on 2026-09-22** (see section 1). The rebuild
+> wiped everything marked ✅ *installed / created / applied* below — items 2, 8 and 10 must be
 > redone, then re-run `bootstrap/preflight.sh` to refresh this table.
 
 | # | Item | Where it lands | Status |
 |---|---|---|---|
-| 1 | **Kubernetes ≥ 1.32** (P2) — was v1.29.15; **rebuilding on v1.36.4** | cluster | ⏳ **Pending rebuild** — see below |
+| 1 | **Kubernetes ≥ 1.32** (P2) — **v1.36.4** on all nodes (was v1.29.15) | cluster | ✅ **Rebuilt 2026-09-22** — see below |
 | 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed** — StorageClass `local-path`, *not* default |
 | 3 | MetalLB VIP for Vault | `overlays/onprem` | ✅ `192.168.56.241` confirmed free |
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
@@ -113,7 +113,8 @@ Status as of the 2026-09-11 preflight run, on the old 1.29 cluster:
 PRD P2 requires ≥ 1.32 and says *"bump if still on 1.29 (EOL)"*. The cluster was on
 v1.29.15 (kubelets v1.29.0). On 2026-09-11 the owner first chose to stay and accept the
 risk, which forced cert-manager and ESO onto end-of-life lines. On 2026-09-22 that was
-reversed: **the cluster is rebuilt on Kubernetes 1.36.4** — the newest minor every
+reversed, and the same day **the cluster was rebuilt on Kubernetes 1.36.4** (all three
+nodes `Ready`, CRI-O 1.36.6, Calico 3.32.2) — the newest minor every
 component below supports (1.37 was four weeks old and not yet in cert-manager's or
 Calico's matrices). Procedure: [`documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md`](../../documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
 

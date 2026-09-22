@@ -64,7 +64,8 @@ observability team.
   **metrics-server v0.7.1**. `addon_dashboard` applies it *after* the control plane installs the
   pinned **v0.9.0**, so the running metrics-server ends up at v0.7.1. That still works on 1.36
   (0.7.x supports 1.27+), but the `software.metrics_server` pin is overridden while the
-  Dashboard is enabled.
+  Dashboard is enabled. **Confirmed after the 2026-09-22 rebuild:** the running image is
+  `metrics-server:v0.7.1`, and `kubectl top nodes` works.
 
 **Why deferred:** Dashboard and Headlamp changes wait for their own JIRA ticket.
 

@@ -391,6 +391,15 @@ for the full diagnose → safe reboot → rebuild → cross-project fixup sequen
 **Moving the cluster to a new Kubernetes version** (e.g. the 1.29 → 1.36 rebuild): see
 [documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md](documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md).
 
+**VMs take ~20 minutes to boot, or freeze mid-provision** (`Timed out while waiting for the
+machine to boot`, `The SSH connection was unexpectedly closed`) on a Windows host. VirtualBox is
+running in Hyper-V "snail mode" because the Windows hypervisor is on: look for `Snail execution
+mode is active!` in the VM's `Logs\VBox.log`. Turn off **both** Memory Integrity and
+`hypervisorlaunchtype` (Administrator PowerShell: `bcdedit /set hypervisorlaunchtype off`), then
+restart. `bcdedit` alone isn't enough while Memory Integrity is on. This disables WSL2 until
+reversed. Details are in the rebuild runbook's
+[What went wrong on the first run](documents/DOCUMENTS-runbook-cluster-upgrade-1-36.md#what-went-wrong-on-the-first-run).
+
 ### Common Issues
 
 **Issue**: VMs fail to start with network errors

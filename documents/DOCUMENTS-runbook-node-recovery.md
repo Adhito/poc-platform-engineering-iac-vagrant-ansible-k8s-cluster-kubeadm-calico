@@ -113,22 +113,29 @@ project (`poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-openteleme
 this repo's Ansible provisioning. This step is a hard requirement of the recovery, not cleanup —
 treat `kubectl get nodes` showing `Ready` as "rebuild done," not "recovery done."
 
-**Script** (run from the Dev VM / wherever this project's tooling normally executes bash):
-```
-C:\Programming-Repository\Github - Adhito909\poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry\scripts\utility-node-registry-recovery.sh
-```
-Git-Bash form:
-```bash
-/c/Programming-Repository/Github\ -\ Adhito909/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry/scripts/utility-node-registry-recovery.sh <node-ip> [namespace]
-```
+**Script: run it inside the Dev VM, not on the Windows host.** It copies the *Dev VM's* SSH key
+and uses the Dev VM's Ansible and kubeconfig. Run from Git Bash on Windows, it fails at once with
+`ssh-copy-id: ERROR: No identities found` (seen 2026-09-22).
 
 Usage: `<node-ip>` is required (see the reference table above), `[namespace]` defaults to
-`tracing-poc`.
+`tracing-poc`. Example for a rebuilt `devnodeworker02`:
 
-Example for a rebuilt `devnodeworker02`:
 ```bash
-/c/Programming-Repository/Github\ -\ Adhito909/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry/scripts/utility-node-registry-recovery.sh 192.168.56.12 tracing-poc
+# on the host:
+cd "/c/Programming-Repository/Github - Adhito909/learning-labs-developer-workspace-type-01"
+vagrant ssh
 ```
+```bash
+# inside the Dev VM:
+ssh-keygen -R 192.168.56.12      # the rebuilt node has a new host key; ssh-copy-id refuses otherwise
+cd ~/workspace-app/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry
+./scripts/utility-node-registry-recovery.sh 192.168.56.12 tracing-poc   # password prompt: vagrant
+```
+
+Its registry step runs against **all three nodes** in the Dev VM's inventory, so every node must
+already trust the Dev VM key. After rebuilding a *single* node that's just the rebuilt one. After a
+**full cluster rebuild**, do all three first and replace the Dev VM's kubeconfig as well. See
+[DOCUMENTS-runbook-cluster-upgrade-1-36.md](DOCUMENTS-runbook-cluster-upgrade-1-36.md) step 5.
 
 If you (whoever is running this cluster-side recovery) don't have direct access to run this — **it
 still needs to happen. Hand off to the apps team with the node IP** rather than considering the

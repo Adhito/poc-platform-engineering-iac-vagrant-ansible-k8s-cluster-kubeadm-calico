@@ -26,20 +26,20 @@ it by that repo and path, not as a local `documents/environment.md`.
 
 Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refresh.
 
-> **Stale after the 1.36 rebuild.** This table is the 2026-09-11 preflight of the old
-> Kubernetes 1.29 cluster. The cluster is being rebuilt on 1.36.4 (see *Kubernetes
-> version* below); re-run preflight afterwards
-> and replace it. Node names and IPs, the MetalLB pool, the VIP and the NodePort are
-> expected to carry over — everything installed on the cluster does not.
+> **Stale after the 1.36 rebuild.** Apart from the Kubernetes and ArgoCD rows, this table is
+> the 2026-09-11 preflight of the old Kubernetes 1.29 cluster. The cluster was rebuilt on
+> 1.36.4 on 2026-09-22 (see *Kubernetes version* below); re-run preflight and replace it. Node
+> names and IPs carried over. Everything that was installed on the cluster did not — the
+> MetalLB pool returns only when the observability team re-bootstraps its ArgoCD apps.
 
 | Value | Status | Blocks |
 |---|---|---|
 | Node names and IPs | ✅ | — |
-| Kubernetes version | ⏳ was `v1.29.15` (fails P2) — **rebuilding on `v1.36.4`** | **A0 gate** until rebuilt |
+| Kubernetes version | ✅ `v1.36.4` on all nodes (rebuilt 2026-09-22; was `v1.29.15`) | — |
 | MetalLB pool and existing allocations | ✅ | — |
 | MetalLB VIP for Vault | ✅ `192.168.56.241` — free | — |
 | NodePort `30004` | ✅ free | — |
-| ArgoCD version | ✅ was `v2.14.8`; **`v3.5.3` after the rebuild** — multi-source supported (≥ 2.6) either way | — |
+| ArgoCD version | ✅ `v3.5.3` (was `v2.14.8`) — multi-source supported (≥ 2.6) | — |
 | **ArgoCD credential for this repo** | ❌ **absent** — only the OTel Helm repo is registered | **A1** — every child fails to fetch |
 | Cluster OIDC issuer | ✅ `https://kubernetes.default.svc.cluster.local` | — |
 | **StorageClass** | ❌ **none exists at all** — `local-path-provisioner` never installed | **A2** — Vault and Postgres PVCs |
@@ -61,7 +61,7 @@ Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refr
 | Kubernetes cluster repo | `poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico` |
 | Provisioning | Vagrant + Ansible (`ansible_local`), kubeadm |
 | CNI | Calico v3.32.2 (was v3.28.0 on 1.29) |
-| Container runtime | CRI-O 1.36.x — same minor as the kubelet (was a stale, unpinned 1.33.0 on 1.29) |
+| Container runtime | CRI-O 1.36.6 — same minor as the kubelet (was a stale, unpinned 1.33.0 on 1.29) |
 | Pod CIDR / Service CIDR | `172.16.1.0/16` / `172.17.1.0/18` |
 
 > The PRD's header says "Target cluster: `learning-labs-developer-workspace-type-01`".
@@ -82,11 +82,11 @@ Verified with `kubectl get nodes -o wide`.
 with *soft* anti-affinity, so two peers share a worker. See
 [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) for the consequence.
 
-### Kubernetes version ⏳ — rebuilding on 1.36
+### Kubernetes version ✅ — rebuilt on 1.36
 
 ```
 before (2026-09-11)   control plane v1.29.15, kubelets v1.29.0   — fails P2
-target                control plane + kubelets v1.36.4           (settings.yaml apt pin 1.36.4-*)
+now    (2026-09-22)   control plane + kubelets v1.36.4           (settings.yaml apt pin 1.36.4-*)
 ```
 
 P2 requires **≥ 1.32** and says to bump if still on 1.29 (EOL). On 2026-09-11 the

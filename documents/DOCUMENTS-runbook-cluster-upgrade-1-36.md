@@ -3,6 +3,11 @@
 Moves the cluster from Kubernetes **1.29** (end of life since Feb 2025) to **1.36.4** by
 **rebuilding** it (`vagrant destroy` + `vagrant up`), not by upgrading in place.
 
+> **Status: done on 2026-09-22.** All three nodes are `Ready` on v1.36.4 with CRI-O 1.36.6,
+> Calico v3.32.2, and Argo CD v3.5.3. It took far longer than planned because of the host issues
+> listed in [What went wrong on the first run](#what-went-wrong-on-the-first-run). Read that
+> section before the next rebuild.
+
 > **This is a shared cluster.** The observability and tracing-poc teams run workloads on it
 > through their own ArgoCD apps. A rebuild takes all of it down and wipes it. Do not start
 > until step 1 is agreed with them.
@@ -87,7 +92,15 @@ vagrant up
 ```
 
 `vagrant destroy -f` is irreversible for the VMs. Run it yourself, and only after step 1 is
-agreed. Expect `vagrant up` to take a while: VMs boot slowly while Hyper-V/VBS is on.
+agreed.
+
+**Before `vagrant up`, check that VirtualBox isn't in Hyper-V "snail mode"** (see
+[What went wrong](#what-went-wrong-on-the-first-run), item 1). In any PowerShell:
+```powershell
+(Get-CimInstance Win32_ComputerSystem).HypervisorPresent
+```
+It must print `False`. With a full-speed host, the whole cluster provisions in well under an
+hour. In snail mode it took hours, and VMs froze mid-provision.
 
 ## 4. Verify the new cluster
 
@@ -116,15 +129,36 @@ That's expected: see [backlog #2](DOCUMENTS-backlog.md).
 ## 5. Restore the cross-project fixups
 
 A fresh `kubeadm join` doesn't restore the Dev workspace VM's SSH trust or the CRI-O trust for
-the private registry (`192.168.56.20:5000`). Run the observability project's fixup for **each
-worker**. See [DOCUMENTS-runbook-node-recovery.md](DOCUMENTS-runbook-node-recovery.md):
+the private registry (`192.168.56.20:5000`). The observability project's fixup script handles
+both. See also [DOCUMENTS-runbook-node-recovery.md](DOCUMENTS-runbook-node-recovery.md).
+
+**Run it from inside the Dev VM, not from Windows.** On the host it fails immediately with
+`ssh-copy-id: ERROR: No identities found`. After a **full** rebuild, the Dev VM also still holds
+the old cluster's SSH host keys and kubeconfig, so clear those first. Its registry-trust playbook
+targets **all three nodes** (master included), so all three need the key:
 
 ```bash
-"/c/Programming-Repository/Github - Adhito909/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry/scripts/utility-node-registry-recovery.sh" 192.168.56.11 tracing-poc
+# on the host, from the Dev VM's project:
+cd "/c/Programming-Repository/Github - Adhito909/learning-labs-developer-workspace-type-01"
+vagrant ssh
 ```
 ```bash
-"/c/Programming-Repository/Github - Adhito909/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry/scripts/utility-node-registry-recovery.sh" 192.168.56.12 tracing-poc
+# inside the Dev VM:
+# 1. forget the old nodes' host keys (the rebuilt nodes have new ones)
+for ip in 192.168.56.10 192.168.56.11 192.168.56.12; do ssh-keygen -R $ip; done
+# 2. trust the Dev VM key on every node (password: vagrant)
+for ip in 192.168.56.10 192.168.56.11 192.168.56.12; do ssh-copy-id vagrant@$ip; done
+# 3. replace the stale kubeconfig with the new cluster's (keeps a copy of the old one)
+cp ~/.kube/config ~/.kube/config.pre-1-36
+ssh vagrant@192.168.56.10 'cat ~/.kube/config' > ~/.kube/config
+kubectl get nodes
+# 4. run the fixup (its registry playbook covers all three nodes in one pass)
+cd ~/workspace-app/poc-swe-app-java-quarkus-pattern-observability-grafana-lgtm-opentelemetry
+./scripts/utility-node-registry-recovery.sh 192.168.56.11 tracing-poc
 ```
+
+Its step 3 (clearing stuck `tracing-poc` pods) finds nothing on a fresh cluster. That's expected,
+because the namespace doesn't exist until the other teams re-bootstrap.
 
 ## 6. Hand back to the other teams
 
@@ -147,6 +181,60 @@ Everything installed for Vault on the old cluster is gone. From
 3. `bootstrap/preflight.sh`. It now **fails** (instead of warning) below Kubernetes 1.32.
 4. cert-manager v1.21.2 and its issuers, then the root platform app.
 
+## Verified result (2026-09-22)
+
+| Check | Result |
+|---|---|
+| Nodes | 3 × `Ready`, kubelet **v1.36.4**, runtime **cri-o://1.36.6**, API server v1.36.4 |
+| Calico | **v3.32.2** on all nodes; CoreDNS v1.14.2, etcd 3.6.8 |
+| metrics-server | **v0.7.1**: the Dashboard's bundled copy overrides the pinned 0.9.0, as expected ([backlog #2](DOCUMENTS-backlog.md)). `kubectl top nodes` works |
+| Argo CD | **v3.5.3**, `https://localhost:30002` → 200. New admin password in `configs/` |
+| Dashboard / Headlamp | `:30001` / `:30003` → 200, still 2.7.0 / 0.26.0 (on hold) |
+| ArgoCD Ingress | Object created; **no controller** until the observability team's ingress-nginx is back |
+
+## What went wrong on the first run
+
+Each of these cost hours. They're listed in the order they happened, with the fix.
+
+1. **VirtualBox ran in Hyper-V "snail mode."** With the Windows hypervisor running, VirtualBox
+   can't use AMD-V/VT-x directly and falls back to Hyper-V's API (`NEMR3Init: Snail execution
+   mode is active!` in `VBox.log`). A fresh node took **~21 min to reach SSH**, and worse, a VM
+   **froze for 11 minutes mid-provision** (`Guest seems to be unresponsive` in `VBox.log`). Vagrant
+   reported that as `The SSH connection was unexpectedly closed`.
+   **Fix: switch off *both* of these, then restart Windows.**
+   - **Memory Integrity:** `HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity` →
+     `Enabled = 0`, or the Windows Security toggle.
+   - **The hypervisor's boot setting:** `bcdedit /set hypervisorlaunchtype off`.
+
+   **`bcdedit` alone is not enough.** While Memory Integrity is on, Windows still starts the
+   hypervisor (System log, `Microsoft-Windows-Hyper-V-Hypervisor` event 1: "Hypervisor
+   successfully started").
+   **Verify:** `HypervisorPresent` is `False`, and `VBox.log` shows `HM: HMR3Init: AMD-V w/ nested
+   paging` (or VT-x) with no `Snail` line. Afterwards the master provisioned in about 10 minutes.
+   **Cost:** WSL2 doesn't run while the hypervisor is off, and Memory Integrity's kernel protection
+   is gone. Undo both and restart to get them back.
+2. **`vagrant destroy` failed with `VBOX_E_OBJECT_NOT_FOUND`.** The old VMs had already been
+   removed from VirtualBox, and their folder had been renamed to `...-V1.29` to keep them as an
+   archive. Re-running `vagrant destroy -f` until every machine shows `not created` is correct.
+   Nothing was deleted: the archive is untouched.
+3. **The 600 s boot timeout was too short for snail mode.** It's now 1800 s in the `Vagrantfile`.
+   After a timeout, Vagrant marks the machine **provisioned** even though it never ran the
+   post-boot steps (hostname, eth1, `/vagrant` mount) or Ansible. `vagrant provision` cannot
+   recover that. Use `vagrant reload <node> --provision`.
+4. **A worker joined with an 11-day-old join file.** `configs/setup-join.sh` lives on the host
+   and survives `vagrant destroy`. With the master unprovisioned, the worker read the 1.29
+   cluster's join command and failed after 5 minutes with `no route to host`. **Now guarded:**
+   `ansible/roles/worker/tasks/join_preflight.yaml` refuses a join file older than 23 h (tokens
+   last 24 h) or a control plane API that isn't reachable, with a message saying which.
+5. **A frozen VM left `dpkg` half-configured.** Provisioning then failed with `dpkg was
+   interrupted, you must manually run 'sudo dpkg --configure -a'`. The master held nothing yet,
+   so recreating it (`vagrant destroy -f devnodemaster01` + `vagrant up devnodemaster01`) was
+   cleaner than repairing it.
+6. **`vagrant destroy` left a folder behind.** A saved-state (`.sav`) file from the snail-mode
+   session kept `...\DEVNODEMASTER01-ANSIBLE\Snapshots\` alive. A folder with the VM's name blocks
+   VirtualBox from moving a newly imported VM into place. Renaming it aside (e.g.
+   `.leftover-from-destroy`) before the import finishes avoids that.
+
 ## Rollback
 
 There's no data on the cluster, so rollback is another rebuild on the old versions:
@@ -163,3 +251,8 @@ vagrant up
 
 Then repeat steps 5 and 6. This only works until `main` itself carries the 1.36 changes; after
 the merge, check out the last 1.29 commit instead.
+
+A second rollback exists while it's kept: the original 1.29 VMs, archived intact (~39 GB) in
+`F:\...\Development Kubernetes Cluster Kubeadm Calico Vagrant Ansible-V1.29\`. They can be
+re-registered in VirtualBox, but **never run them alongside the 1.36 VMs**, because they use
+the same IPs (192.168.56.10–.12) and VM names. Delete the archive once 1.36 has proven itself.
