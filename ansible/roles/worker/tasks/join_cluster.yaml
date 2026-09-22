@@ -4,6 +4,10 @@
     path: /etc/kubernetes/kubelet.conf
   register: kubelet_conf_stat
 
+- name: Validate the join command and control plane before joining
+  ansible.builtin.include_tasks: join_preflight.yaml
+  when: not kubelet_conf_stat.stat.exists
+
 - name: Read join command from shared configs location
   ansible.builtin.slurp:
     src: "{{ configs_path }}/setup-join.sh"
