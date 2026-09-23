@@ -27,6 +27,7 @@ ANSIBLE_EXTRA_VARS = {
   "metallb_version"          => settings["software"]["metallb"] || "",
   "ingress_nginx_version"    => settings["software"]["ingress_nginx"] || "",
   "metallb_ip_range"         => settings["network"]["metallb_ip_range"],
+  "ingress_nginx_loadbalancer_ip" => settings["network"]["ingress_nginx_loadbalancer_ip"] || "",
   "existing_ingress_nginx_lb_ip" => settings["network"]["existing_ingress_nginx_lb_ip"] || "",
   "os"                       => settings["software"]["os"],
   "num_worker_nodes"         => NUM_WORKER_NODES,

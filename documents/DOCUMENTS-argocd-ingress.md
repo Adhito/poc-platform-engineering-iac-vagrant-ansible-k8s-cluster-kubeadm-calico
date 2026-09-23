@@ -21,7 +21,7 @@ The hostname is built from two values:
 | Part | Source | Current value |
 |---|---|---|
 | host label | `argocd_ingress_host` in `ansible/roles/addon_argocd/defaults/main.yaml` | `infra-utility-argocd` |
-| LB IP | `network.existing_ingress_nginx_lb_ip` in `settings.yaml` (shared cluster) **or** the `ingress_nginx_lb_ip` fact from `addon_ingress_nginx` (fresh cluster) | `192.168.56.240` |
+| LB IP | `network.ingress_nginx_loadbalancer_ip` in `settings.yaml`, pinned on the controller this repo installs (`addon_ingress_nginx`). `network.existing_ingress_nginx_lb_ip` is only for reusing a controller this repo doesn't install | `192.168.56.240` |
 
 Naming convention: utility tools are prefixed `infra-utility-<tool>` so they group together and are easy to recall.
 

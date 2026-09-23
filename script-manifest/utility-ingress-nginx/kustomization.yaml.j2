@@ -1,0 +1,34 @@
+# ingress-nginx controller, owned by this repo (applied by addon_ingress_nginx via kubectl apply -k).
+# Rendered to /tmp/ingress-nginx/kustomization.yaml at provision time.
+#
+# The upstream static manifest, plus two patches that must be in place at CREATE time:
+#   - the Service's LoadBalancer IP is pinned, so every <name>.<ip>.nip.io hostname stays stable.
+#     Pinning after creation would let MetalLB hand out an arbitrary pool address first.
+#   - the nginx IngressClass is the cluster default, so an Ingress without ingressClassName
+#     still gets served (the observability repo's Helm install set this; kept for continuity).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v{{ ingress_nginx_version }}/deploy/static/provider/cloud/deploy.yaml
+
+patches:
+{% if ingress_nginx_loadbalancer_ip | default('') | length > 0 %}
+  - target:
+      kind: Service
+      name: ingress-nginx-controller
+      namespace: {{ ingress_nginx_namespace }}
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          metallb.io/loadBalancerIPs: "{{ ingress_nginx_loadbalancer_ip }}"
+{% endif %}
+  - target:
+      kind: IngressClass
+      name: nginx
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          ingressclass.kubernetes.io/is-default-class: "true"

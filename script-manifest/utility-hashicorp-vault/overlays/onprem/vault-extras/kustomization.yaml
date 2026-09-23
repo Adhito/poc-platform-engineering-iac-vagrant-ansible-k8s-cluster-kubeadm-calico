@@ -17,10 +17,10 @@ resources:
 #   MetalLB VIP   192.168.56.241              ← PROPOSED, NOT CONFIRMED
 #
 # On the VIP: this cluster's MetalLB pool `local-pool` (192.168.56.240-.250) is
-# owned by the observability team's ArgoCD `metallb` app, and .240 is already
-# taken by ingress-nginx. Requesting .241 from that pool is ADDITIVE — it
-# allocates an address, it does not edit their IPAddressPool — which keeps this
-# inside Rule 8. Confirm it is free first:
+# owned by this repo (settings.yaml network.metallb_ip_range, applied by
+# addon_metallb), and .240 is ingress-nginx's pinned address. Requesting .241 from
+# that pool is ADDITIVE — it allocates an address, it does not edit the
+# IPAddressPool — which keeps this inside Rule 8. Confirm it is free first:
 #
 #   kubectl get svc -A -o wide | grep 192.168.56.24
 #

@@ -20,17 +20,17 @@ network:
     - 1.1.1.1
   pod_cidr: 172.16.1.0/16
   service_cidr: 172.17.1.0/18
-  # IP range MetalLB hands out to LoadBalancer services (e.g. ingress-nginx).
-  # Must not overlap node IPs (192.168.56.10-.1N), your VirtualBox hostonly DHCP range,
-  # or other MetalLB IPAddressPools already on this cluster (check: kubectl get ipaddresspool -A).
-  # .240-.250 is already claimed by the "local-pool" IPAddressPool (observability-local) - avoided below.
-  metallb_ip_range: 192.168.56.200-192.168.56.230
-  # LoadBalancer IP of the ingress-nginx controller the ArgoCD Ingress routes through, used when
-  # this repo is NOT installing its own ingress-nginx (software.ingress_nginx empty). On this shared
-  # GitOps cluster the ingress-nginx controller (an ArgoCD app owned by the observability/tracing-poc
-  # teams) already sits at 192.168.56.240 - reuse it. Leave empty on a fresh standalone cluster, where
-  # addon_ingress_nginx discovers this automatically.
-  existing_ingress_nginx_lb_ip: 192.168.56.240
+  # IP range MetalLB hands out to LoadBalancer services. This repo is the single owner of MetalLB
+  # and ingress-nginx (platform decision, 2026-09-23); app repos only create Ingresses/Services.
+  # Must not overlap node IPs (192.168.56.10-.1N), the Dev VM (.20), or your VirtualBox hostonly
+  # DHCP range. Reserved inside it: .240 ingress-nginx (below), .241 Vault (vault-lb).
+  # Every app hostname is <name>.192.168.56.240.nip.io - don't move the pool without moving that.
+  metallb_ip_range: 192.168.56.240-192.168.56.250
+  # The ingress-nginx controller's pinned LoadBalancer IP (metallb.io/loadBalancerIPs).
+  ingress_nginx_loadbalancer_ip: 192.168.56.240
+  # Only for reusing an ingress-nginx this repo does NOT install (software.ingress_nginx empty):
+  # the LB IP of that controller, for the ArgoCD Ingress. Empty while this repo owns the controller.
+  existing_ingress_nginx_lb_ip: ""
 nodes:
   control:
     cpu: 4
@@ -63,12 +63,11 @@ software:
   argocd: 3.5.3
   # To skip Headlamp installation, set its version to an empty value or comment it out:
   headlamp: 0.26.0
-  # To skip MetalLB/ingress-nginx installation, set either version to an empty value or comment it out.
-  # DISABLED on this cluster: it is SHARED with the observability project, which already installs
-  # MetalLB (FRR mode, via Helm) and ingress-nginx. This repo's own copies conflict with those
-  # (duplicate MetalLB speakers cannot bind host ports -> stuck Pending). Reuse the existing ones.
-  # For a FRESH standalone cluster, restore these: metallb: 0.14.9 / ingress_nginx: 1.11.3
-  metallb: ""
-  ingress_nginx: ""
+  # MetalLB and ingress-nginx are cluster infrastructure owned by THIS repo. App repos must not
+  # install either (two MetalLB installs fight over host ports - speakers stuck Pending).
+  # MetalLB 0.16.1 accepts K8s >= 1.19. ingress-nginx 1.15.1 is its FINAL release (project retired
+  # March 2026) and is tested only up to K8s 1.35 - see documents/DOCUMENTS-backlog.md #1.
+  metallb: 0.16.1
+  ingress_nginx: 1.15.1
 
   os: xUbuntu_22.04

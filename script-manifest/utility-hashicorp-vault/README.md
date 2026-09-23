@@ -96,7 +96,7 @@ Status as of the 2026-09-23 preflight run, on the rebuilt 1.36 cluster (from the
 |---|---|---|---|
 | 1 | **Kubernetes ≥ 1.32** (P2) — **v1.36.4** on all nodes (was v1.29.15) | cluster | ✅ **Rebuilt 2026-09-22** — see below |
 | 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed 2026-09-23** — StorageClass `local-path`, *not* default |
-| 3 | MetalLB VIP for Vault | `overlays/onprem` | ⏳ `192.168.56.241` free, but **MetalLB itself is not installed** on the rebuilt cluster — it returns when the observability team re-creates `local-root`. **Blocks `root-platform`:** wave 0's `vault-lb` never gets an address, so ArgoCD never starts wave 1 |
+| 3 | MetalLB VIP for Vault | `overlays/onprem` | ⏳ `192.168.56.241` free, but **MetalLB itself is not installed** on the rebuilt cluster — it returns when this repo's `addon_metallb` runs (`vagrant provision devnodeworker02`); this repo owns MetalLB since 2026-09-23. **Blocks `root-platform`:** wave 0's `vault-lb` never gets an address, so ArgoCD never starts wave 1 |
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
 | 5 | Prometheus operator-managed (A0.5 check 5a) | — | ✅ **No** — `vault-monitoring` parked in `argocd/disabled/` |
 | 6 | Cluster OIDC issuer | bootstrap | ✅ `https://kubernetes.default.svc.cluster.local` |

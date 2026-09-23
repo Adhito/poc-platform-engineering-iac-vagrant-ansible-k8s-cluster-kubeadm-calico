@@ -1,4 +1,7 @@
 ---
 ingress_nginx_version: ""
 ingress_nginx_namespace: ingress-nginx
+# Pinned controller LoadBalancer IP; real value comes from settings.yaml (network.ingress_nginx_loadbalancer_ip).
+# Empty = let MetalLB pick one from the pool.
+ingress_nginx_loadbalancer_ip: ""
 configs_path: /vagrant/configs

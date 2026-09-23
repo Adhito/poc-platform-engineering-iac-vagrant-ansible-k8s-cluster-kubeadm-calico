@@ -161,12 +161,13 @@ because the namespace doesn't exist until the other teams re-bootstrap.
 
 ## 6. Hand back to the other teams
 
-- They re-create their ArgoCD root app. `local-root` then brings back MetalLB, ingress-nginx,
-  and the observability stack.
-- Once ingress-nginx has its LB IP again (expected `192.168.56.240`, the same pool), confirm
-  the ArgoCD Ingress: `https://infra-utility-argocd.192.168.56.240.nip.io`. If the IP changed,
-  update `network.existing_ingress_nginx_lb_ip` in `settings.yaml` and run
-  `vagrant provision devnodeworker02`.
+- **Since 2026-09-23, MetalLB and ingress-nginx come from this repo** (`addon_metallb`,
+  `addon_ingress_nginx`), so a rebuild's `vagrant up` brings them back by itself, with
+  ingress-nginx pinned to `192.168.56.240`. Confirm the ArgoCD Ingress:
+  `https://infra-utility-argocd.192.168.56.240.nip.io`.
+- They re-create their ArgoCD root app (`local-root`), which brings back the observability
+  stack only; its Ingresses use the controller above. **Their repo must not install MetalLB
+  or ingress-nginx again** (removed there on 2026-09-23).
 - Share the new ArgoCD admin password (`configs/credentials_argocd_admin_password`) through
   whatever channel you normally use. Never put it in git or chat.
 
