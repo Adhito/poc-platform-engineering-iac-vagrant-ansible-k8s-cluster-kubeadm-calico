@@ -89,24 +89,21 @@ patched in at the overlay, not baked into the base.
 ## Before this can be applied — Phase A0 status
 
 These are **not** optional polish. Several will silently half-work if skipped.
-Status as of the 2026-09-11 preflight run, on the old 1.29 cluster:
-
-> **The cluster was rebuilt on Kubernetes 1.36 on 2026-09-22** (see section 1). The rebuild
-> wiped everything marked ✅ *installed / created / applied* below — items 2, 8 and 10 must be
-> redone, then re-run `bootstrap/preflight.sh` to refresh this table.
+Status as of the 2026-09-23 preflight run, on the rebuilt 1.36 cluster (from the Dev VM):
+**passed 19, failed 3** — MetalLB (below), and git state until this branch is pushed and merged.
 
 | # | Item | Where it lands | Status |
 |---|---|---|---|
 | 1 | **Kubernetes ≥ 1.32** (P2) — **v1.36.4** on all nodes (was v1.29.15) | cluster | ✅ **Rebuilt 2026-09-22** — see below |
-| 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed** — StorageClass `local-path`, *not* default |
-| 3 | MetalLB VIP for Vault | `overlays/onprem` | ✅ `192.168.56.241` confirmed free |
+| 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed 2026-09-23** — StorageClass `local-path`, *not* default |
+| 3 | MetalLB VIP for Vault | `overlays/onprem` | ⏳ `192.168.56.241` free, but **MetalLB itself is not installed** on the rebuilt cluster — it returns when the observability team re-creates `local-root`. **Blocks `root-platform`:** wave 0's `vault-lb` never gets an address, so ArgoCD never starts wave 1 |
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
 | 5 | Prometheus operator-managed (A0.5 check 5a) | — | ✅ **No** — `vault-monitoring` parked in `argocd/disabled/` |
 | 6 | Cluster OIDC issuer | bootstrap | ✅ `https://kubernetes.default.svc.cluster.local` |
-| 7 | **ArgoCD repo credential** for this repo | ArgoCD config | ❌ **Absent** — the owner creates it; see below |
-| 8 | Postgres admin password Secret | cluster | ✅ Created — never in git (Rule 1) |
-| 9 | **cert-manager** | cluster | ❌ **Not installed** — pinned in `base/cert-manager/`, awaiting the owner's go |
-| 10 | Namespaces | cluster | ✅ Applied |
+| 7 | ArgoCD access to this repo | ArgoCD config | ✅ **Not needed** — the repo is public, and every Application uses its HTTPS URL; see below |
+| 8 | Postgres admin password Secret | cluster | ✅ Created 2026-09-23 (32 chars, via a 0600 temp file) — never in git (Rule 1) |
+| 9 | cert-manager | cluster | ✅ **v1.21.2 installed 2026-09-23** — `selfsigned-bootstrap` and `vault-poc-ca-issuer` Ready, `vault-poc-ca` issued |
+| 10 | Namespaces | cluster | ✅ Applied 2026-09-23 |
 
 ### 1 — Kubernetes 1.36 (P2 gate — resolved by the rebuild)
 
@@ -160,9 +157,12 @@ The remote is an SSH host alias:
 git@github.com-adhito909:Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
 ```
 
-ArgoCD cannot resolve `github.com-adhito909`. The `Application`s here use the HTTPS URL and
-need either a credential in ArgoCD or a deploy key with a plain SSH URL. The vault repo hit
-this identical problem in `root-applications.yaml` — same fix, both repos.
+ArgoCD cannot resolve `github.com-adhito909`, so the `Application`s here use the HTTPS URL.
+**The repo is public** (verified 2026-09-22: anonymous `git ls-remote` works, GitHub reports
+`"private": false`), so ArgoCD reads it anonymously and **no credential is needed**.
+`bootstrap/preflight.sh` probes anonymous access first, and falls back to checking for a
+credential only if the probe fails. If the repo is ever made private, register a
+credential or a deploy key; the vault repo's `root-applications.yaml` has the same concern.
 
 ### 8 — Postgres admin password ✅ done
 
@@ -207,11 +207,11 @@ The Phase A0 prerequisites are applied **directly**, not through the root app �
 exist before ArgoCD creates anything that depends on them. In order:
 
 ```bash
-# storage — done 2026-09-11 on the 1.29 cluster; REDO after the 1.36 rebuild
+# storage — done 2026-09-23 on the 1.36 cluster
 kubectl apply -k script-manifest/utility-hashicorp-vault/base/local-path-provisioner
-# namespaces — done 2026-09-11 on the 1.29 cluster; REDO after the 1.36 rebuild
+# namespaces — done 2026-09-23 on the 1.36 cluster
 kubectl apply -k script-manifest/utility-hashicorp-vault/base/namespaces
-# cert-manager v1.21.2; --server-side for its large CRDs
+# cert-manager v1.21.2 — done 2026-09-23; --server-side for its large CRDs
 kubectl apply --server-side -k script-manifest/utility-hashicorp-vault/base/cert-manager
 kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
 # the issuer chain — only once the webhook is serving, or the apply is rejected
