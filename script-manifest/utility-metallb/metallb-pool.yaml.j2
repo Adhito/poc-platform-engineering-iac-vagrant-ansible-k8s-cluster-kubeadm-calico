@@ -1,7 +1,12 @@
+# The cluster's single MetalLB address pool, owned by this repo (applied by addon_metallb).
+# Names match the pool the observability repo used to create, so nothing that referenced it
+# by name changes. App repos request an address from it with metallb.io/loadBalancerIPs;
+# they must not create IPAddressPools of their own (an overlapping pool is rejected by
+# MetalLB's admission webhook).
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
-  name: default-pool
+  name: local-pool
   namespace: {{ metallb_namespace }}
 spec:
   addresses:
@@ -10,8 +15,8 @@ spec:
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: default-l2adv
+  name: local-l2
   namespace: {{ metallb_namespace }}
 spec:
   ipAddressPools:
-    - default-pool
+    - local-pool

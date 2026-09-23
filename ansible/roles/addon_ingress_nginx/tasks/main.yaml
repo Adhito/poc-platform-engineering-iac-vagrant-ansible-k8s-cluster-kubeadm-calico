@@ -1,23 +1,55 @@
 ---
-- name: Apply ingress-nginx controller manifest
+- name: Create ingress-nginx kustomization directory
+  ansible.builtin.file:
+    path: /tmp/ingress-nginx
+    state: directory
+    mode: '0755'
+
+- name: Render ingress-nginx kustomization (upstream manifest + pinned LB IP + default IngressClass)
+  ansible.builtin.template:
+    src: /vagrant/script-manifest/utility-ingress-nginx/kustomization.yaml.j2
+    dest: /tmp/ingress-nginx/kustomization.yaml
+    mode: '0644'
+
+# The two admission Jobs are one-shot and their pod templates are immutable, so re-applying
+# after a version bump fails with "field is immutable". They only generate the webhook's cert
+# (kept in a Secret that survives), so removing the finished Jobs before apply is safe.
+- name: Remove finished admission Jobs so a version bump can re-create them
   ansible.builtin.command: >
-    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v{{ ingress_nginx_version }}/deploy/static/provider/cloud/deploy.yaml
+    kubectl -n {{ ingress_nginx_namespace }} delete job
+    ingress-nginx-admission-create ingress-nginx-admission-patch --ignore-not-found
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
+  changed_when: false
+
+- name: Apply ingress-nginx controller
+  ansible.builtin.command: kubectl apply -k /tmp/ingress-nginx
   environment:
     KUBECONFIG: /home/vagrant/.kube/config
   become: true
   become_user: vagrant
   changed_when: true
 
-- name: Wait for ingress-nginx controller pod to be Running
-  ansible.builtin.command: kubectl get pods -n {{ ingress_nginx_namespace }} --field-selector=status.phase=Running
+- name: Wait for the admission webhook certificate Jobs to complete
+  ansible.builtin.command: >
+    kubectl -n {{ ingress_nginx_namespace }} wait --for=condition=complete job --all --timeout=300s
   environment:
     KUBECONFIG: /home/vagrant/.kube/config
   become: true
   become_user: vagrant
-  register: ingress_nginx_pods
-  until: ingress_nginx_pods.rc == 0 and 'ingress-nginx-controller' in ingress_nginx_pods.stdout
-  retries: 30
-  delay: 10
+  changed_when: false
+
+# Ready, not just Running: ArgoCD's Ingress is applied right after this role, and the
+# controller's admission webhook rejects Ingresses until the controller is serving.
+- name: Wait for the ingress-nginx controller to be ready
+  ansible.builtin.command: >
+    kubectl -n {{ ingress_nginx_namespace }} rollout status deploy/ingress-nginx-controller --timeout=300s
+  environment:
+    KUBECONFIG: /home/vagrant/.kube/config
+  become: true
+  become_user: vagrant
   changed_when: false
 
 - name: Wait for ingress-nginx controller LoadBalancer IP to be assigned
@@ -33,6 +65,17 @@
   retries: 30
   delay: 10
   changed_when: false
+
+- name: Refuse a LoadBalancer IP other than the pinned one
+  ansible.builtin.fail:
+    msg: >-
+      ingress-nginx got {{ ingress_nginx_lb_ip_result.stdout }}, not the pinned
+      {{ ingress_nginx_loadbalancer_ip }}. Every <name>.{{ ingress_nginx_loadbalancer_ip }}.nip.io
+      hostname depends on it. Is the address free and inside network.metallb_ip_range?
+      Check: kubectl get svc -A | grep {{ ingress_nginx_loadbalancer_ip }}
+  when:
+    - ingress_nginx_loadbalancer_ip | default('') | length > 0
+    - ingress_nginx_lb_ip_result.stdout != ingress_nginx_loadbalancer_ip
 
 - name: Store ingress-nginx controller LoadBalancer IP as a fact
   ansible.builtin.set_fact:
