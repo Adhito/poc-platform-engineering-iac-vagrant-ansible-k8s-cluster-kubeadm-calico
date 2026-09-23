@@ -30,7 +30,7 @@ Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refr
 > the 2026-09-11 preflight of the old Kubernetes 1.29 cluster. The cluster was rebuilt on
 > 1.36.4 on 2026-09-22 (see *Kubernetes version* below); re-run preflight and replace it. Node
 > names and IPs carried over. Everything that was installed on the cluster did not — the
-> MetalLB pool returns only when the observability team re-bootstraps its ArgoCD apps.
+> MetalLB pool returns when this repo's `addon_metallb` is applied (it now owns MetalLB).
 
 | Value | Status | Blocks |
 |---|---|---|
@@ -116,7 +116,7 @@ upstream on 2026-09-22:
 The upgrade removed both end-of-life pins that 1.29 forced, and let the
 `ClusterSecretStore` move to `external-secrets.io/v1` as the PRD specifies.
 
-**Known exception on the shared cluster:** the observability team's ingress-nginx
+**Known exception on the shared cluster:** the cluster's ingress-nginx
 is upstream-retired (March 2026), and its final release (v1.15.1) is tested only
 up to 1.35. It is kept deliberately for now and tracked in the cluster repo's
 [`documents/DOCUMENTS-backlog.md`](../../../documents/DOCUMENTS-backlog.md). Vault
@@ -132,15 +132,15 @@ Three teams' workloads coexist here. It matters for Rule 8 (additive-only).
 |---|---|---|
 | `observability` | observability team | Grafana LGTM stack |
 | `tracing-poc` | tracing-poc team | Quarkus demo apps |
-| `metallb-system` | observability team | via ArgoCD app `metallb` |
-| `ingress-nginx` | observability team | via ArgoCD app `ingress-nginx` |
+| `metallb-system`, `ingress-nginx` | platform (this repo) | Ansible `addon_metallb` / `addon_ingress_nginx` — moved from the observability repo 2026-09-23 |
 | `argocd`, `kubernetes-dashboard`, `headlamp` | platform (this repo) | |
 | `vault`, `external-secrets`, `poc-hashicorp-vault-application` | **Stage A** | created by A0 |
 
-**You may add objects. You may not edit theirs.** MetalLB and ingress-nginx are
-ArgoCD-managed by another team — a manual `kubectl edit` on either is reverted on
-their next sync, and an edit to their `IPAddressPool` or scrape config is out of
-bounds regardless.
+**You may add objects. You may not edit theirs.** The observability stack is
+ArgoCD-managed by another team — a manual `kubectl edit` is reverted on their next
+sync, and an edit to their scrape config is out of bounds regardless. MetalLB and
+ingress-nginx are platform infrastructure owned by **this repo**: change them via
+`settings.yaml` and the Ansible roles, never by hand.
 
 ---
 
@@ -152,7 +152,7 @@ Verified with `kubectl get ipaddresspool -A`.
 
 | Pool | Range | Owner |
 |---|---|---|
-| `local-pool` | `192.168.56.240` – `192.168.56.250` | ArgoCD app `metallb` (observability team) |
+| `local-pool` | `192.168.56.240` – `192.168.56.250` | this repo — `network.metallb_ip_range`, applied by `addon_metallb` |
 
 Known allocations:
 
@@ -166,15 +166,15 @@ Known allocations:
 kubectl get svc -A -o wide | grep 192.168.56.24     # confirm .241 is free
 ```
 
-Requesting an address *from* their pool is additive; it allocates, it does not
+Requesting an address *from* the pool is additive; it allocates, it does not
 edit the pool. It must be **pinned**, not auto-assigned, because it appears in
 the certificate SANs and an address that moves on resync silently invalidates the
 cert. Pinned via `metallb.io/loadBalancerIPs` in
 `overlays/onprem/vault-extras/kustomization.yaml`.
 
-> This repo's own MetalLB and ingress-nginx addons are **disabled**
-> (`software.metallb: ""`, `software.ingress_nginx: ""` in `settings.yaml`)
-> precisely so they do not fight the observability team's install.
+> Since 2026-09-23 this repo is the **only** owner of MetalLB (0.16.1) and
+> ingress-nginx (1.15.1, pinned to `.240`). The observability repo no longer installs
+> either — two MetalLB installs fight over host ports. See the cluster repo's README.
 
 ### Vault exposure (D8)
 
@@ -247,8 +247,6 @@ Present and managing this cluster. Verified with `kubectl get applications -n ar
 | Application | Owner |
 |---|---|
 | `local-root` | app-of-apps root (observability team) |
-| `ingress-nginx` | observability team |
-| `metallb` | observability team |
 | `observability-local` | observability team |
 | `root-platform` | **Stage A** (this repo) — applied at A1 |
 

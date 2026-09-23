@@ -28,8 +28,10 @@ This project provides a fully automated Kubernetes cluster deployment that inclu
 - **GitOps**: ArgoCD v3.5.3 for continuous deployment
 - **Metrics**: Metrics Server v0.9.0 for resource monitoring
 - **Dashboard Alternative**: Headlamp v0.26.0 lightweight Kubernetes UI
-- **Load Balancing**: MetalLB for bare-metal `LoadBalancer` services on the hostonly network
-- **Ingress**: ingress-nginx, exposing ArgoCD at a `nip.io` hostname alongside its NodePort
+- **Load Balancing**: MetalLB v0.16.1 for bare-metal `LoadBalancer` services on the hostonly network (pool `192.168.56.240-.250`)
+- **Ingress**: ingress-nginx v1.15.1 pinned to `192.168.56.240`, exposing ArgoCD at a `nip.io` hostname alongside its NodePort
+
+MetalLB and ingress-nginx are **cluster infrastructure owned by this repo** (Platform Engineering). App teams don't install either; they create their own `Ingress` objects (`ingressClassName: nginx`, host `<name>.192.168.56.240.nip.io`) from their own repos, and ask Platform for a dedicated LoadBalancer IP when they need one.
 
 The cluster is configured with custom pod and service CIDRs, DNS servers, and port forwarding for easy access to web UIs from your host machine.
 
@@ -104,7 +106,7 @@ Ensure VirtualBox is configured to allow the private network range 192.168.56.0/
 * 192.168.56.0/24
 ```
 
-MetalLB hands out IPs from `network.metallb_ip_range` in `settings.yaml` (default `192.168.56.200-192.168.56.230`) on this same subnet. Before provisioning, confirm this range doesn't overlap your VirtualBox hostonly adapter's own DHCP server, or any `IPAddressPool` from another MetalLB install already sharing this cluster:
+MetalLB hands out IPs from `network.metallb_ip_range` in `settings.yaml` (default `192.168.56.240-192.168.56.250`; `.240` is ingress-nginx, `.241` Vault) on this same subnet. Before provisioning, confirm this range doesn't overlap your VirtualBox hostonly adapter's own DHCP server, and that no other MetalLB install is on the cluster (this repo must be its only owner):
 ```shell
 VBoxManage list dhcpservers
 kubectl get ipaddresspool -A
@@ -182,7 +184,8 @@ network:
     - 1.1.1.1
   pod_cidr: 172.16.1.0/16          # Pod network CIDR
   service_cidr: 172.17.1.0/18      # Service network CIDR
-  metallb_ip_range: 192.168.56.200-192.168.56.230  # MetalLB LoadBalancer IP pool
+  metallb_ip_range: 192.168.56.240-192.168.56.250  # MetalLB LoadBalancer IP pool
+  ingress_nginx_loadbalancer_ip: 192.168.56.240    # ingress-nginx controller's pinned IP
 
 nodes:
   control:
@@ -200,8 +203,8 @@ software:
   kubernetes: 1.36.4-*             # Kubernetes version (CRI-O follows its minor)
   metrics_server: 0.9.0            # metrics-server version
   argocd: 3.5.3                    # ArgoCD version
-  metallb: 0.14.9                  # MetalLB version
-  ingress_nginx: 1.11.3            # ingress-nginx controller version
+  metallb: 0.16.1                  # MetalLB version
+  ingress_nginx: 1.15.1            # ingress-nginx controller version (final release)
 ```
 
 ### Environment Variables
@@ -343,14 +346,12 @@ ArgoCD provides GitOps continuous delivery for Kubernetes.
 **Access URL (Ingress)**: `https://infra-utility-argocd.<lb-ip>.nip.io`, where `<lb-ip>` is the ingress-nginx controller's LoadBalancer IP. (Utility tools follow an `infra-utility-<tool>` hostname convention; the label comes from the `argocd_ingress_host` default in `ansible/roles/addon_argocd/defaults/main.yaml`.)
 
 ```shell
-# Fresh standalone cluster (this repo installed ingress-nginx):
+# The controller's pinned IP (network.ingress_nginx_loadbalancer_ip), as assigned:
 cat configs/credential_ingress_nginx_lb_ip
-# Shared cluster (reusing an existing controller): the value of
-# network.existing_ingress_nginx_lb_ip in settings.yaml
-# e.g. 192.168.56.240 -> https://infra-utility-argocd.192.168.56.240.nip.io
+# 192.168.56.240 -> https://infra-utility-argocd.192.168.56.240.nip.io
 ```
 
-The Ingress uses the `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` annotation, so ingress-nginx forwards over HTTPS to `argocd-server`'s own self-signed TLS backend — no controller-level SSL-passthrough flag is required, which is what lets the Ingress reuse an ingress-nginx controller this repo doesn't own. Your browser shows a self-signed certificate warning on either URL; this is expected, click through it. The NodePort URL keeps working unchanged.
+The Ingress uses the `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` annotation, so ingress-nginx forwards over HTTPS to `argocd-server`'s own self-signed TLS backend — no controller-level SSL-passthrough flag is required, which also keeps the controller free of cluster-wide flags that would affect every team's Ingresses. Your browser shows a self-signed certificate warning on either URL; this is expected, click through it. The NodePort URL keeps working unchanged.
 
 **Credentials**:
 - **Username**: `admin`
@@ -519,6 +520,7 @@ poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/
 │   ├── utility-dashboard/                  # Dashboard component YAMLs
 │   ├── utility-argocd/                     # ArgoCD Ingress Jinja2 template + unused legacy TLS certs
 │   ├── utility-metallb/                    # MetalLB IPAddressPool/L2Advertisement Jinja2 template
+│   ├── utility-ingress-nginx/              # ingress-nginx kustomization (pinned LB IP, default IngressClass)
 │   ├── utility-headlamp/                   # Headlamp Jinja2 template
 │   ├── utility-hashicorp-vault/            # Vault platform (Stage A) — ArgoCD-delivered, not Ansible
 │   └── application-otel-demo/              # OpenTelemetry Demo manifests (manual apply)
