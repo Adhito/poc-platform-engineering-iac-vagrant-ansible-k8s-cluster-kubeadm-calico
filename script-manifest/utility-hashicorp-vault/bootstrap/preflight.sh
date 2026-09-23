@@ -76,7 +76,11 @@ log_step "1 — git state (blocks ArgoCD: it pulls from the remote, not your dis
 
 if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse >/dev/null 2>&1; then
   REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
-  DIRTY="$(git -C "$REPO_ROOT" status --porcelain -- script-manifest/utility-hashicorp-vault | wc -l | tr -d ' ')"
+  # The repo is edited on Windows (autocrlf -> CRLF working copy) and often checked from the
+  # Dev VM through a vboxsf mount, whose Linux git would report every file as modified.
+  # Normalise line endings and ignore mode bits so only real content changes count.
+  DIRTY="$(git -C "$REPO_ROOT" -c core.autocrlf=input -c core.fileMode=false \
+             status --porcelain -- script-manifest/utility-hashicorp-vault | wc -l | tr -d ' ')"
   if [[ "$DIRTY" == "0" ]]; then
     ok_ "utility-hashicorp-vault is fully committed"
   else
