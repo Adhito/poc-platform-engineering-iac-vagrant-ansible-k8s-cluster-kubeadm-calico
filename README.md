@@ -66,6 +66,7 @@ The following ports are forwarded from guest VMs to your host machine:
 - **30003**: Headlamp UI (http://localhost:30003)
 - **31000**: OpenTelemetry Demo frontend proxy (http://localhost:31000)
 - **32000**: Sample NGINX deployment (if deployed)
+- **2310 / 2311 / 2312**: SSH to devnodemaster01 / devnodeworker01 / devnodeworker02 (`127.0.0.1` only; `vagrant ssh` uses these). Pinned from `network.ssh_port_base` so they never collide with another Vagrant project's auto-assigned port (2200–2250), which would otherwise make `vagrant resume` fail with "port ... is already in use"
 
 ## Prerequisites
 

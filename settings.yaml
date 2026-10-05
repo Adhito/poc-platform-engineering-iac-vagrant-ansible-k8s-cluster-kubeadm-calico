@@ -18,6 +18,11 @@ network:
   dns_servers:
     - 8.8.8.8
     - 1.1.1.1
+  # Fixed host-side SSH ports: control plane = base, workerN = base + N (2310, 2311, 2312).
+  # Kept outside 2200-2250, the range Vagrant auto-assigns to other projects' VMs (e.g. the Dev VM),
+  # and away from 3000 (Grafana / dev servers). Takes effect on a node's next cold boot
+  # (`vagrant reload <node>`), not on `vagrant resume`.
+  ssh_port_base: 2310
   pod_cidr: 172.16.1.0/16
   service_cidr: 172.17.1.0/18
   # IP range MetalLB hands out to LoadBalancer services. This repo is the single owner of MetalLB

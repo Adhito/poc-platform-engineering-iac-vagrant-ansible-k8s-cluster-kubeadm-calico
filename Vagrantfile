@@ -9,6 +9,10 @@ IP_NW = IP_SECTIONS.captures[0]
 # Last octet excluding all dots:
 IP_START = Integer(IP_SECTIONS.captures[1])
 NUM_WORKER_NODES = settings["nodes"]["workers"]["count"]
+# Fixed SSH host ports: control plane = base, workerN = base + N. Pinned (no auto_correct)
+# because an auto-assigned port is frozen into a suspended VM, and another project's VM can
+# grab it meanwhile - then `vagrant resume` fails with "port ... is already in use".
+SSH_PORT_BASE = Integer(settings["network"]["ssh_port_base"] || 2310)
 
 # All settings.yaml values passed to every ansible_local run as extra_vars.
 # This keeps settings.yaml as the single source of truth for versions and network config.
@@ -56,6 +60,10 @@ Vagrant.configure("2") do |config|
     ## Assign IP From Settings YAML
     controlplane.vm.network "private_network", ip: settings["network"]["control_ip"]
 
+    ## Pinned SSH port (id "ssh" replaces Vagrant's auto-assigned 2222/2200+ forward)
+    controlplane.vm.network "forwarded_port", id: "ssh", guest: 22, host: SSH_PORT_BASE,
+      host_ip: "127.0.0.1", auto_correct: false
+
     ## Open forwarded ports toward host machine so host can access services
     ## Port 30001 : Kubernetes UI Dashboard
     ## Port 30002 : Kubernetes UI ArgoCD
@@ -102,6 +110,8 @@ Vagrant.configure("2") do |config|
     config.vm.define "devnodeworker0#{i}" do |node|
       node.vm.hostname = "devnodeworker0#{i}"
       node.vm.network "private_network", ip: IP_NW + "#{IP_START + i}"
+      node.vm.network "forwarded_port", id: "ssh", guest: 22, host: SSH_PORT_BASE + i,
+        host_ip: "127.0.0.1", auto_correct: false
 
       if settings["shared_folders"]
         settings["shared_folders"].each do |shared_folder|
