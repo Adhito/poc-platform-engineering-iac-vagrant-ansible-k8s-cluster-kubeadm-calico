@@ -101,22 +101,34 @@ log_step "Unseal"
 
 # Keys are passed on STDIN, never as argv — argv is visible in the process list
 # to every user on the box.
+#
+# NOT `vault operator unseal -`: that command takes the key only as an argument or
+# from an interactive TTY prompt. A `-` argument is sent literally as the key
+# (400 "'key' must be a valid hex or base64 string"), and piping with no argument
+# fails because there is no TTY (verified against Vault 2.0.4's
+# command/operator_unseal.go). `vault write sys/unseal -` reads a JSON body from
+# stdin instead, and jq builds that body straight from the keys file, so a share
+# never appears in any process's argv (jq's argv holds only the index).
+unseal_share_json() {
+  jq -ce --argjson i "$1" '{key: .unseal_keys_b64[$i]} | select(.key != null)' "$KEYS_FILE" \
+    || die "share $1 missing from ${KEYS_FILE}"
+}
+
 unseal_via_addr() {
-  local i key
+  local i
   for (( i = 0; i < KEY_THRESHOLD; i++ )); do
-    key="$(jq -r ".unseal_keys_b64[$i]" "$KEYS_FILE")"
-    [[ -n "$key" && "$key" != "null" ]] || die "share $i missing from ${KEYS_FILE}"
-    printf '%s' "$key" | vault operator unseal - >/dev/null
-    log_ok "applied share $((i + 1))/${KEY_THRESHOLD}  ($(redact "$key"))"
+    unseal_share_json "$i" | vault write sys/unseal - >/dev/null
+    log_ok "applied share $((i + 1))/${KEY_THRESHOLD}  ($(redact "$(jq -r ".unseal_keys_b64[$i]" "$KEYS_FILE")"))"
   done
 }
 
 unseal_peer() {
-  local pod="$1" i key
+  local pod="$1" i
   for (( i = 0; i < KEY_THRESHOLD; i++ )); do
-    key="$(jq -r ".unseal_keys_b64[$i]" "$KEYS_FILE")"
-    printf '%s' "$key" \
-      | kubectl -n "$K8S_NS" exec -i "$pod" -- vault operator unseal - >/dev/null
+    # Inside the pod the CLI already has VAULT_ADDR=https://127.0.0.1:8200 and
+    # VAULT_CACERT set by the chart, so TLS stays verified on this path too.
+    unseal_share_json "$i" \
+      | kubectl -n "$K8S_NS" exec -i "$pod" -- vault write sys/unseal - >/dev/null
   done
   log_ok "${pod} unsealed"
 }
@@ -158,11 +170,13 @@ log_ok "sealed      : $(jq -r '.sealed'      <<<"$STATUS")"
 log_ok "storage     : $(jq -r '.storage_type' <<<"$STATUS")"
 log_ok "HA mode     : $(jq -r '.ha_mode // "n/a"' <<<"$STATUS")"
 
-cat >&2 <<'EOF'
+cat >&2 <<EOF
 
   Next:
-    export VAULT_TOKEN="$(jq -r .root_token "$HOME/.credentials/vault-poc/vault-init.json")"
+    export VAULT_TOKEN="\$(jq -r .root_token "${KEYS_FILE}")"
     ./10-enable-kubernetes-auth.sh
+EOF
+cat >&2 <<'EOF'
 
   Still owed by this phase's exit gate:
     - Password-manager copy of vault-init.json
