@@ -15,6 +15,14 @@ configs/config
 configs/config
 configs/setup-join.sh
 
+## Vault secret material (D20) — must never be committed. The bootstrap scripts write these
+## OUTSIDE the repo; these patterns are the safety net, and 00-init-unseal.sh refuses to run
+## unless vault-init.json is ignored here.
+vault-init.json
+breakglass-userpass.txt
+*.snap
+.credentials/
+
 ## Files from Claude
 CLAUDE.md
 .claude/
