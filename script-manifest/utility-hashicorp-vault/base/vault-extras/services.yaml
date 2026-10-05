@@ -15,9 +15,27 @@
 # A seal event you cannot reach Vault to fix is the worst failure in this
 # design, so a second path with a different failure mode earns its keep.
 #
-# Both target the ACTIVE pod, so writes always land on the Raft leader and no
-# request-forwarding or redirect behaviour is involved. TLS is terminated by
-# Vault itself on both — nothing proxies or re-encrypts.
+# They also differ in WHICH pods they reach:
+#
+#   vault-lb        only the ACTIVE pod (`vault-active: "true"`), so everyday
+#                   writes land on the Raft leader with no request forwarding.
+#   vault-nodeport  EVERY Vault server pod, sealed or not.
+#
+# The difference is load-bearing. Vault only labels a pod `vault-active` once it
+# is initialised, unsealed and leading. An uninitialised or fully sealed Vault
+# has NO active pod, so an active-only Service has no endpoints. vault-lb then
+# goes dark entirely (externalTrafficPolicy: Local means MetalLB answers ARP for
+# the VIP only from a node with a ready local endpoint: clients get "no route to
+# host"). That is exactly when you need to reach Vault: the first `operator init`,
+# and every seal event. So the break-glass path must not depend on the active
+# label. Sealed pods still pass readiness (sealedcode=204 in the Helm values), so
+# they remain endpoints here. Found 2026-10-05 on the first init.
+#
+# Caveat with more than one replica: a request through vault-nodeport may land on
+# any pod. Unseal progress is PER POD, so do not feed shares through it while
+# several pods are sealed. Use `00-init-unseal.sh --all-peers` (kubectl exec per pod).
+#
+# TLS is terminated by Vault itself on both — nothing proxies or re-encrypts.
 # ############################################################################
 
 # ---------- Primary: MetalLB LoadBalancer ----------
@@ -60,11 +78,12 @@ metadata:
     vault-poc/exposure: break-glass
 spec:
   type: NodePort
+  # NO `vault-active` here, deliberately: see the header. This path must reach a
+  # sealed or uninitialised Vault.
   selector:
     app.kubernetes.io/instance: vault
     app.kubernetes.io/name: vault
     component: server
-    vault-active: "true"
   ports:
     - name: https
       port: 8200

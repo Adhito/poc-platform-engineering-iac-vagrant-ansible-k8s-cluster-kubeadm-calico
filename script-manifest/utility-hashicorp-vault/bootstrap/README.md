@@ -58,11 +58,18 @@ kubectl -n vault get secret vault-tls -o jsonpath='{.data.ca\.crt}' \
 a missing SAN or an unmounted CA — fix that (Rule 3). The node IPs are the usual
 omission, which breaks the NodePort break-glass path precisely when it's needed.
 
-If MetalLB is the thing that's broken, use the break-glass path instead:
+**Run `00-init-unseal.sh` through the break-glass path.** The VIP above only routes
+to the *active* (unsealed, leading) pod, and an uninitialised or fully sealed Vault
+has none. Until `00` has run, `192.168.56.241` answers `no route to host`. The NodePort
+reaches every Vault pod, sealed or not:
 
 ```bash
-export VAULT_ADDR=https://192.168.56.10:30004
+export VAULT_ADDR=https://192.168.56.10:30004      # any node IP — all are in the cert SANs
+./00-init-unseal.sh
+export VAULT_ADDR=https://192.168.56.241:8200      # back to the VIP once Vault is active
 ```
+
+Use the same NodePort address whenever MetalLB itself is broken.
 
 ## Run order
 
