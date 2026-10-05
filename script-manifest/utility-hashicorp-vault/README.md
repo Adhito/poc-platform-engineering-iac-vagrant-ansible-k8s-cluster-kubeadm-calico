@@ -61,6 +61,7 @@ script-manifest/utility-hashicorp-vault/
 └── documents/
     ├── architecture.md               # what is built, and what is deliberately absent
     ├── environment.md                # verified live values — read these, never hardcode
+    ├── developer-setup.md            # NEW DEVELOPER? start here: vault CLI + CA + env on the Dev VM
     ├── licensing.md                  # BUSL 1.1 position + the outstanding policy check
     ├── key-custody.md                # unseal-key custody: method and holder, never location
     └── runbooks/
@@ -68,6 +69,9 @@ script-manifest/utility-hashicorp-vault/
         ├── snapshot-restore.md
         └── upgrade.md
 ```
+
+**New developer who just needs to use Vault?** Follow
+[`documents/developer-setup.md`](documents/developer-setup.md) (CLI, CA, environment, checks).
 
 **Start at [`documents/environment.md`](documents/environment.md).** It carries every
 cluster-specific value, marked verified / inferred / unknown, with the command that

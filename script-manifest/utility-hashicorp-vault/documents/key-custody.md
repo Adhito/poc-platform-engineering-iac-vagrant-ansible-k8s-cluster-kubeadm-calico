@@ -70,6 +70,25 @@ directory, creates it with those modes, and **asserts the resolved path is
 outside the repo, aborting if it is not** — so the guard is mechanical, not a
 matter of remembering.
 
+**As implemented here (decided 2026-10-05):** the bootstrap scripts run inside the
+Dev VM, but the keys are written to the **Windows host** through the Dev VM's shared
+folder:
+
+```bash
+export VAULT_POC_KEYS="$HOME/workspace-app/.credentials/vault-poc"
+```
+
+`~/workspace-app` is a live mount of the host folder that holds the project repos,
+so the file lives on the workstation's disk. It survives `vagrant destroy` of the Dev
+VM (the rejected "Dev VM only" option below), and it sits outside every repo (the
+guard passes, and the parent folder is not itself a git repo).
+
+**The accepted trade-off:** VirtualBox shared folders (`vboxsf`) ignore `chmod`, so
+inside the VM the directory and file show as `777`. The `0700`/`0600` modes are not
+enforced there. Any process in the Dev VM can read the keys. On the host, access is
+governed by the Windows user profile's permissions. Acceptable for a single-operator
+lab where the Dev VM has one user; it would not be on a shared machine.
+
 ### Second copy
 
 The full contents pasted into a password-manager secure note, by hand, once, at

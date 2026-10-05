@@ -8,6 +8,7 @@ who owns it, and what would trigger picking it up. Remove an entry when it's don
 | 1 | [ingress-nginx is retired upstream](#1--ingress-nginx-is-retired-upstream) | Platform (this repo) | Kept in use, deliberately | 2026-09-22 |
 | 2 | [Dashboard archived; its manifest overrides the pinned metrics-server](#2--dashboard-archived-its-manifest-overrides-the-pinned-metrics-server) | this repo | Waiting on its JIRA ticket | 2026-09-22 |
 | 3 | [Guardrails for the Platform / SRE ingress boundary](#3--guardrails-for-the-platform--sre-ingress-boundary) | Platform (this repo) | Not started | 2026-09-23 |
+| 4 | [No Vault login method for human developers](#4--no-vault-login-method-for-human-developers) | Platform (this repo) | Not started | 2026-10-05 |
 
 ---
 
@@ -105,3 +106,26 @@ touches the other teams' Applications, so it needs their agreement.
 
 **Picking it up — triggers:** a third team joining the cluster, any accidental install of a
 second MetalLB, or a hostname collision.
+
+---
+
+## 4 — No Vault login method for human developers
+
+**What:** Vault's only auth methods are Kubernetes auth for workloads (`level1-app` …
+`level4-app`, `eso`) and one `breakglass` userpass identity reserved for root recovery.
+Once `99-revoke-root.sh` revokes the root token, a developer who has followed
+`script-manifest/utility-hashicorp-vault/documents/developer-setup.md` can run
+`vault status` but can't log in to read or debug anything.
+
+**Why deferred:** Stage A's PRD scope is the platform plus the workload paths. A human
+auth design (which method, which policies, token TTLs) is a separate decision, and the
+break-glass identity must not be repurposed for it.
+
+**Options when picked up:** `userpass` per developer with a read-only policy and short
+TTLs (simplest for a lab), or OIDC against an identity provider (the production answer).
+Either way: one identity per person (no shared accounts), policies scoped to what
+debugging needs, and an audit trail (`60-enable-audit.sh` already logs every request).
+
+**Picking it up — triggers:** the first developer who needs to read a secret directly, or
+Stage B debugging that can't be done through the workloads.
+

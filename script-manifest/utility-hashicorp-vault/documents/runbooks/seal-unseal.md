@@ -99,12 +99,20 @@ kubectl -n vault get secret vault-tls -o jsonpath='{.data.ca\.crt}' \
   | base64 -d | sudo tee /etc/vault-poc/ca.crt >/dev/null
 ```
 
-**If `VAULT_ADDR` does not respond, switch to the break-glass path** — MetalLB
-may be exactly what broke:
+**When every pod is sealed, use the break-glass path.** The VIP (`vault-lb`,
+`192.168.56.241`) only routes to the *active* pod, and a fully sealed Vault has
+none. The VIP then gives `no route to host`, even with MetalLB healthy. The NodePort
+reaches every Vault pod, sealed or not, so it's the path for unsealing. It's also the
+fallback when MetalLB itself is broken:
 
 ```bash
 export VAULT_ADDR=https://192.168.56.10:30004      # any node IP, NodePort
 ```
+
+With more than one sealed pod, the NodePort may send each request to a different pod,
+and unseal progress is per pod. Unseal them one by one with
+`bootstrap/00-init-unseal.sh --all-peers`, which uses `kubectl exec` into each pod.
+Switch back to the VIP once one pod is unsealed and active.
 
 > **Never reach for `-tls-skip-verify`.** A TLS error here means a missing SAN or
 > the wrong CA, and both are fixable in less time than the bypass will cost you
