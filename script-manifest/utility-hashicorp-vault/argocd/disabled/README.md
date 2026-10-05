@@ -1,6 +1,6 @@
 # Disabled ArgoCD children
 
-Applications here are **not** synced — `root-platform` only reads
+Applications here are **not** synced — the root app (`utility-hashicorp-vault`) only reads
 `argocd/applications/` (`directory.recurse: false`). Each one is parked for a
 recorded reason, with its manifests kept intact so re-enabling is a single `mv`.
 

@@ -143,7 +143,7 @@ for n in devnodemaster01 devnodeworker01 devnodeworker02; do
 done
 
 # 5. Redeploy. ArgoCD will recreate it — or force a sync.
-argocd app sync vault      # or: kubectl -n argocd patch app vault ... 
+argocd app sync utility-hashicorp-vault-server   # or: kubectl -n argocd patch app utility-hashicorp-vault-server ...
 
 # 6. Initialise the fresh instance. These keys are THROWAWAY.
 vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/throwaway-init.json

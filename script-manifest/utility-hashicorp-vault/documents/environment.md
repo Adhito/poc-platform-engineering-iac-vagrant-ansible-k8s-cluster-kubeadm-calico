@@ -248,7 +248,7 @@ Present and managing this cluster. Verified with `kubectl get applications -n ar
 |---|---|
 | `local-root` | app-of-apps root (observability team) |
 | `observability-local` | observability team |
-| `root-platform` | **Stage A** (this repo) — applied at A1 |
+| `utility-hashicorp-vault` | **Stage A** (this repo) root app, from `argocd/root-platform.yaml` — applied at A1 |
 
 ### Repo credential ❌ — blocks A1
 

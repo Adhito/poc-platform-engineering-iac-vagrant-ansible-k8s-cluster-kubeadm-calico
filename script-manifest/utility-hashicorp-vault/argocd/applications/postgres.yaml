@@ -13,7 +13,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgres
+  name: utility-hashicorp-vault-postgres
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"

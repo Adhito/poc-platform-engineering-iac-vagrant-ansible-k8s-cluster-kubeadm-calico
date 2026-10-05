@@ -16,7 +16,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: vault
+  name: utility-hashicorp-vault-server
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "1"
@@ -34,6 +34,12 @@ spec:
       # bootstrap/95-create-breakglass.sh for how recovery still works.
       targetRevision: 0.34.1
       helm:
+        # Pinned: ArgoCD would otherwise use the Application name as the Helm release
+        # name, and the chart names everything after it (StatefulSet `vault`, pods
+        # vault-0..2, Services vault-active / vault-internal). The certificate SANs,
+        # the vault-extras Services (selector app.kubernetes.io/instance: vault) and
+        # the bootstrap scripts all depend on these names.
+        releaseName: vault
         valueFiles:
           - $values/script-manifest/utility-hashicorp-vault/helm/vault/values-onprem.yaml
     - repoURL: https://github.com/Adhito/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico.git
