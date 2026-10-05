@@ -73,7 +73,10 @@ vault_is_initialized() {
 vault_is_sealed() {
   local j; j="$(vault_status_json)"
   [[ -z "$j" ]] && return 0          # unreachable counts as "not usable"
-  [[ "$(jq -r '.sealed // true' <<<"$j")" == "true" ]]
+  # NOT `.sealed // true`: jq's `//` falls back on false as well as null, so that
+  # turned "sealed": false into true and every unsealed Vault read as sealed.
+  # Only a MISSING field should default to sealed.
+  [[ "$(jq -r 'if .sealed == null then true else .sealed end' <<<"$j")" == "true" ]]
 }
 
 require_vault_reachable() {
