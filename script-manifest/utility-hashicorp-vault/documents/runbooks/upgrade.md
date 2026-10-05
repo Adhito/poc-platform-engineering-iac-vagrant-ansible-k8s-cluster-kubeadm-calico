@@ -94,7 +94,7 @@ server:
     tag: "2.0.4"    # -> new version (never lower — see the rule above)
 ```
 
-ArgoCD has `selfHeal: true` on the `vault` Application, so any `kubectl edit` or
+ArgoCD has `selfHeal: true` on the `utility-hashicorp-vault-server` Application, so any `kubectl edit` or
 `kubectl set image` is reverted on the next sync. Commit, push, let it sync.
 
 **2. Confirm the StatefulSet spec updated but pods did not.**

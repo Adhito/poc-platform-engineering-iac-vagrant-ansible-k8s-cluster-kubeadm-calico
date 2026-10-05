@@ -199,10 +199,16 @@ Sync waves order the children:
 
 | Wave | Child | Why this order |
 |---|---|---|
-| 0 | `vault-extras` | The StatefulSet **mounts** the cert and reviewer Secret — they must exist first |
-| 1 | `vault` | The chart itself |
-| 3 | `external-secrets`, `postgres` | The ESO chart, and the database Level 3 needs |
-| 4 | `external-secrets-store` | Its CRD comes from the ESO chart in wave 3 |
+| 0 | `utility-hashicorp-vault-extras` | The StatefulSet **mounts** the cert and reviewer Secret — they must exist first |
+| 1 | `utility-hashicorp-vault-server` | The chart itself (Helm release still `vault`) |
+| 3 | `utility-hashicorp-vault-external-secrets`, `utility-hashicorp-vault-postgres` | The ESO chart (release `external-secrets`), and the database Level 3 needs |
+| 4 | `utility-hashicorp-vault-external-secrets-store` | Its CRD comes from the ESO chart in wave 3 |
+
+Every Application is prefixed `utility-hashicorp-vault-` because all teams' apps share the
+`argocd` namespace, where a generic name like `postgres` would collide. The prefix is
+display-only: the Helm apps pin `releaseName`, so Kubernetes resource names (`vault-0`,
+`vault-active`, `external-secrets-webhook`, ...) are unchanged. Like the root app, don't
+rename these once applied, because deleting a live app cascades through its finalizer.
 
 Wave 2 (`vault-monitoring`) is parked in `argocd/disabled/` — see section 5.
 
