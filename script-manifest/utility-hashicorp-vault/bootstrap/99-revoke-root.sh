@@ -110,7 +110,7 @@ cat >&2 <<'EOF'
       authenticated endpoint, so log in as break-glass first (95-):
 
         export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
-            password=@$HOME/.credentials/vault-poc/breakglass-userpass.txt)"
+            password=@"${VAULT_POC_KEYS:-$HOME/.credentials/vault-poc}/breakglass-userpass.txt")"
         OTP="$(vault operator generate-root -generate-otp)"   # KEEP it for -decode
         vault operator generate-root -init -otp="$OTP"        # note the nonce
         vault operator generate-root -nonce=<nonce>           # x3, one per key share

@@ -29,7 +29,7 @@ drill exists.
 ## Where snapshots live
 
 ```
-~/.credentials/vault-poc/snapshots/vault-<YYYY-MM-DD-HHMMSS>.snap
+$VAULT_POC_KEYS/snapshots/vault-<YYYY-MM-DD-HHMMSS>.snap
 ```
 
 Beside the keys, mode `0600`, **outside the repo tree** — same reasoning as the
@@ -83,8 +83,8 @@ one are not.
 
 ```bash
 # 1. Confirm you have BOTH halves before touching anything.
-ls -l ~/.credentials/vault-poc/vault-init.json
-ls -lt ~/.credentials/vault-poc/snapshots/ | head
+ls -l $VAULT_POC_KEYS/vault-init.json
+ls -lt $VAULT_POC_KEYS/snapshots/ | head
 
 # 2. Vault must be running, initialised, and unsealed to accept a restore.
 #    On a fresh instance that means initialising it first — those keys are
@@ -92,7 +92,7 @@ ls -lt ~/.credentials/vault-poc/snapshots/ | head
 vault status
 
 # 3. Restore. This OVERWRITES EVERYTHING in the target.
-vault operator raft snapshot restore -force ~/.credentials/vault-poc/snapshots/vault-<ts>.snap
+vault operator raft snapshot restore -force $VAULT_POC_KEYS/snapshots/vault-<ts>.snap
 
 # 4. Vault seals itself immediately — the restored data is under the OLD seal.
 #    Unseal with the ORIGINAL shares from vault-init.json.
@@ -150,10 +150,10 @@ vault operator init -key-shares=5 -key-threshold=3 -format=json > /tmp/throwaway
 vault operator unseal   # x3, using the THROWAWAY shares, just to accept the restore
 
 # 7. Restore.
-vault operator raft snapshot restore -force ~/.credentials/vault-poc/snapshots/vault-<ts>.snap
+vault operator raft snapshot restore -force $VAULT_POC_KEYS/snapshots/vault-<ts>.snap
 
 # 8. Unseal with the ORIGINAL shares. This is the step that teaches the lesson.
-vault operator unseal   # x3, from ~/.credentials/vault-poc/vault-init.json
+vault operator unseal   # x3, from $VAULT_POC_KEYS/vault-init.json
 
 # 9. STOP THE CLOCK.
 

@@ -56,7 +56,7 @@ cd script-manifest/utility-hashicorp-vault/bootstrap
 ./90-snapshot.sh
 
 # 2. Confirm you can still unseal — you will need to, three times, shortly.
-ls -l ~/.credentials/vault-poc/vault-init.json
+ls -l $VAULT_POC_KEYS/vault-init.json
 
 # 3. Record the starting state.
 vault status

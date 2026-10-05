@@ -174,15 +174,16 @@ This isn't part of developer setup. It's recorded here so the whole picture is i
 place.
 
 - The bootstrap scripts (`bootstrap/00-…` through `99-…`) need one more variable, which
-  makes them write the unseal keys to the **Windows host** through the shared folder:
+  makes them write the unseal keys to this repo's gitignored `.credentials/` folder:
   ```bash
-  export VAULT_POC_KEYS="$HOME/workspace-app/.credentials/vault-poc"
+  export VAULT_POC_KEYS="$HOME/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/.credentials/vault-poc"
   ```
-- Keys, the break-glass password and snapshots live there:
-  `C:\Programming-Repository\Github - Adhito909\.credentials\vault-poc\`. That's outside
-  every repo, and it survives a Dev VM `vagrant destroy`.
-  [`key-custody.md`](key-custody.md) records the method and its trade-off (the shared
-  folder can't enforce `0600`).
+- Keys, the break-glass password and snapshots live in this repo's **gitignored**
+  `.credentials\vault-poc\` folder on the Windows host. They survive a Dev VM
+  `vagrant destroy`. [`key-custody.md`](key-custody.md) records the method and the
+  accepted risks.
+- **Never run `git clean -xfd` (or `-X`) in this repo**: it deletes ignored files,
+  the unseal keys included. Never `git add -f` anything under `.credentials/`.
 - Run order and guards: [`../bootstrap/README.md`](../bootstrap/README.md).
 - **Never** paste `vault-init.json`, a share, a root token or the break-glass password
   into a chat, ticket, commit or screenshot. If one leaks: rekey, as the lifecycle table

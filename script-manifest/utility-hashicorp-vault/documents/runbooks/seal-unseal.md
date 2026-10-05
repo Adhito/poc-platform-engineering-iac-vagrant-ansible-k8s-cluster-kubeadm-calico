@@ -186,7 +186,7 @@ outright** — it cannot reschedule. See
 ## Key custody
 
 **POC arrangement:** all five shares live together in
-`~/.credentials/vault-poc/vault-init.json` on the dev workspace host, mode `0600`
+`$VAULT_POC_KEYS/vault-init.json` on the dev workspace host, mode `0600`
 in a `0700` directory, **outside the repo tree**, with a copy in a password
 manager.
 
@@ -226,7 +226,7 @@ that token comes from the break-glass login (`bootstrap/95-create-breakglass.sh`
 
 ```bash
 export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
-    password=@$HOME/.credentials/vault-poc/breakglass-userpass.txt)"
+    password=@$VAULT_POC_KEYS/breakglass-userpass.txt)"
 
 vault operator rekey -init -key-shares=5 -key-threshold=3   # note the nonce
 vault operator rekey -nonce=<nonce>                          # x3, one per current share
@@ -252,7 +252,7 @@ required. Two factors, and root never exists at rest.
 ```bash
 # 1. Authenticate as break-glass (a 15-minute token)
 export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
-    password=@$HOME/.credentials/vault-poc/breakglass-userpass.txt)"
+    password=@$VAULT_POC_KEYS/breakglass-userpass.txt)"
 
 # 2. Generate the one-time password and KEEP it — step 4 needs the same value.
 #    Inlining it into -init with $(...) discards it, and the root token that
