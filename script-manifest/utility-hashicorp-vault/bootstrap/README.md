@@ -26,6 +26,9 @@ It prints a paste-ready block for `environment.md` at the end.
 
 ## Prerequisites
 
+> Setting up the CLI for the first time? The step-by-step version, with checks and
+> troubleshooting, is [`../documents/developer-setup.md`](../documents/developer-setup.md).
+
 On the Dev VM (`192.168.56.20`), with `vault`, `kubectl`, `jq`, `gpg`, `openssl`:
 
 ```bash
