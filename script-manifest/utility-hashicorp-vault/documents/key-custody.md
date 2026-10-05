@@ -102,6 +102,31 @@ originally said "outside the repository tree"):
 The previous location (the parent folder) avoided the first four. Moving back is a
 one-line change of `VAULT_POC_KEYS` plus moving the files.
 
+#### Decision record: scoped to DEV only
+
+| | |
+|---|---|
+| **Decision** | Keys in the repo's gitignored `.credentials/vault-poc/` |
+| **Environment** | **DEV only**: this Vagrant lab cluster |
+| **Owner** | Adhito (SRE, repository owner), who accepted the risks above in full |
+| **Date** | 2026-10-05 |
+| **Rationale** | A disposable development environment, nothing irreplaceable in Vault (see *Why that trade is proportionate* below), a single operator. Keeping everything for the platform in one folder was judged worth the risks |
+
+**This does not carry over to STG or PRD.** In any staging or production environment:
+
+- Unseal keys and recovery material live **outside every repository**, never in a
+  gitignored folder of one. The "In-repo + `.gitignore`" row under *Why not the
+  alternatives* is a hard rule there, not a trade-off.
+- `assert_keys_path_safe` should be set back to **outside-the-repo only** (the
+  original guard: refuse any in-repo path, ignored or not).
+- Keys must not sit on a filesystem mounted into the cluster nodes.
+- Apply *The production alternative* below: split custody, offline shares, rekey on
+  holder change.
+
+Revisit this record if this cluster ever stops being a disposable DEV environment:
+shared with people outside the platform team, holding data that can't be recreated,
+or reachable from outside the host.
+
 ### Second copy
 
 The full contents pasted into a password-manager secure note, by hand, once, at
