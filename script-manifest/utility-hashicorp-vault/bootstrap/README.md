@@ -31,6 +31,17 @@ On the Dev VM (`192.168.56.20`), with `vault`, `kubectl`, `jq`, `gpg`, `openssl`
 ```bash
 export VAULT_ADDR=https://192.168.56.241:8200      # MetalLB VIP (D8 primary)
 export VAULT_CACERT=/etc/vault-poc/ca.crt          # CA that signed Vault's cert
+# Keys on the Windows host via the Dev VM's shared folder, so they survive a Dev VM
+# destroy. See documents/key-custody.md for the trade-off (vboxsf ignores chmod).
+export VAULT_POC_KEYS="$HOME/workspace-app/.credentials/vault-poc"
+```
+
+The `vault` CLI must match the server (2.0.4). Install the release binary, checksum-verified:
+
+```bash
+cd /tmp && curl -fsSLO https://releases.hashicorp.com/vault/2.0.4/vault_2.0.4_linux_amd64.zip \
+  && curl -fsSL https://releases.hashicorp.com/vault/2.0.4/vault_2.0.4_SHA256SUMS | grep linux_amd64 | sha256sum -c - \
+  && unzip -o vault_2.0.4_linux_amd64.zip vault && sudo install -m 0755 vault /usr/local/bin/vault && vault version
 ```
 
 Extract the CA from the cluster if you don't have it locally:
