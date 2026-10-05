@@ -70,24 +70,37 @@ directory, creates it with those modes, and **asserts the resolved path is
 outside the repo, aborting if it is not** — so the guard is mechanical, not a
 matter of remembering.
 
-**As implemented here (decided 2026-10-05):** the bootstrap scripts run inside the
-Dev VM, but the keys are written to the **Windows host** through the Dev VM's shared
-folder:
+**As implemented here (decided 2026-10-05, revised the same day by the owner):**
+the bootstrap scripts run inside the Dev VM, and the keys live in **this repo's
+gitignored `.credentials/vault-poc/` folder**:
 
 ```bash
-export VAULT_POC_KEYS="$HOME/workspace-app/.credentials/vault-poc"
+export VAULT_POC_KEYS="$HOME/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/.credentials/vault-poc"
 ```
 
-`~/workspace-app` is a live mount of the host folder that holds the project repos,
-so the file lives on the workstation's disk. It survives `vagrant destroy` of the Dev
-VM (the rejected "Dev VM only" option below), and it sits outside every repo (the
-guard passes, and the parent folder is not itself a git repo).
+On the host that's
+`C:\Programming-Repository\Github - Adhito909\poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico\.credentials\vault-poc\`.
+The owner chose the repo folder over the earlier location (the parent folder, outside
+every repo) to keep everything for this platform in one place. `.gitignore` covers
+`.credentials/`, `vault-init.json`, `breakglass-userpass.txt` and `*.snap`.
 
-**The accepted trade-off:** VirtualBox shared folders (`vboxsf`) ignore `chmod`, so
-inside the VM the directory and file show as `777`. The `0700`/`0600` modes are not
-enforced there. Any process in the Dev VM can read the keys. On the host, access is
-governed by the Windows user profile's permissions. Acceptable for a single-operator
-lab where the Dev VM has one user; it would not be on a shared machine.
+**What still protects the keys.** `assert_keys_path_safe` (in `bootstrap/lib/common.sh`)
+refuses to write secret material to any in-repo path that git doesn't ignore, or
+under which anything is tracked. An ordinary `git add .` can't commit them.
+
+**Risks accepted by keeping them in the repo** (the reasons the method above
+originally said "outside the repository tree"):
+
+| Risk | Mitigation |
+|---|---|
+| `git clean -xfd` (or `-X`) **deletes ignored files**, the keys included | Rule: never run it in this repo. The password-manager copy is the recovery |
+| `git add -f` bypasses `.gitignore` | Rule: never force-add under `.credentials/`. Secret-scan before pushing |
+| **Vagrant mounts this repo into every cluster node at `/vagrant`**, so root on any node can read the keys, on the same cluster Vault runs on | Accepted for a single-operator lab. Would not be acceptable anywhere shared |
+| Copies of the repo folder (zip, backup, IDE or assistant indexing) include ignored files | Don't copy the repo folder wholesale; exclude `.credentials/` |
+| VirtualBox shared folders ignore `chmod`, so the `0700`/`0600` modes aren't enforced inside the VMs | Windows profile permissions govern access on the host |
+
+The previous location (the parent folder) avoided the first four. Moving back is a
+one-line change of `VAULT_POC_KEYS` plus moving the files.
 
 ### Second copy
 

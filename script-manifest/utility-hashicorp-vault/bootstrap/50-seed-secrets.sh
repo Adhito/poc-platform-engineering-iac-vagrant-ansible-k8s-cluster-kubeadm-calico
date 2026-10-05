@@ -61,7 +61,7 @@ if kv_path_exists "$MOUNT" "$PGP_PATH"; then
   log_warn "re-run this, then re-encrypt and re-ship the fixture."
 else
   ARTIFACT_DIR="$(vault_poc_keys_dir)/level4-artifacts"
-  assert_path_outside_repo "$ARTIFACT_DIR"
+  assert_keys_path_safe "$ARTIFACT_DIR"
   mkdir -p "$ARTIFACT_DIR"; chmod 0700 "$ARTIFACT_DIR"
 
   TMP="$(mktemp -d)"

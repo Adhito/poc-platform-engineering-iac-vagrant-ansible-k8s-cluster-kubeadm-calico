@@ -158,19 +158,37 @@ _abs_path() {
   printf '%s' "${head%/}${tail}"
 }
 
-assert_path_outside_repo() {
-  local target="$1" repo_root
+# D20 guard: a path that will hold secret material must never be committable.
+#
+# Outside the repo: always fine. Inside the repo: allowed ONLY if git ignores the
+# path AND nothing under it is tracked. Keys inside the repo were the owner's
+# explicit choice on 2026-10-05 (documents/key-custody.md records why and the risks
+# accepted). This guard keeps the part that matters: the keys can never be
+# committed by an ordinary `git add`. What it cannot prevent, and what is accepted:
+#   - `git clean -xfd` deletes ignored files, the keys included. Never run it here.
+#   - `git add -f` bypasses .gitignore.
+#   - Vagrant mounts this repo into every cluster node at /vagrant.
+assert_keys_path_safe() {
+  local target="$1" repo_root rel
   repo_root="$(git -C "${SCRIPT_DIR:-$PWD}" rev-parse --show-toplevel 2>/dev/null || true)"
   [[ -n "$repo_root" ]] || return 0
   repo_root="$(_abs_path "$repo_root")"
   target="$(_abs_path "$target")"
   case "${target%/}/" in
     "${repo_root}"/* | "${repo_root}/")
-      die "REFUSING TO WRITE KEYS INSIDE THE REPO (D20).
+      rel="${target#"${repo_root}"/}"
+      [[ "$target" != "$repo_root" && -n "$rel" ]] \
+        || die "REFUSING TO USE THE REPO ROOT ITSELF FOR SECRET MATERIAL (D20): ${target}"
+      # A probe file name under the directory: ignored-ness of the directory
+      # itself is what we need, and this works whether or not it exists yet.
+      git -C "$repo_root" check-ignore -q -- "${rel%/}/.d20-probe" \
+        || die "REFUSING TO WRITE KEYS TO A PATH GIT DOES NOT IGNORE (D20).
      resolved: ${target}
      repo:     ${repo_root}
-     Unset or repoint VAULT_POC_KEYS. An in-repo file survives 'vagrant destroy'
-     but NOT 'git clean -xfd', and 'git add -f' bypasses .gitignore entirely."
+     Add it to .gitignore (the repo ignores .credentials/), or repoint VAULT_POC_KEYS."
+      [[ -z "$(git -C "$repo_root" ls-files -- "$rel")" ]] \
+        || die "REFUSING: files under ${rel} are TRACKED by git (D20). Untrack them first."
+      log_warn "keys path is inside the repo (gitignored): never run 'git clean -xfd' here"
       ;;
   esac
 }

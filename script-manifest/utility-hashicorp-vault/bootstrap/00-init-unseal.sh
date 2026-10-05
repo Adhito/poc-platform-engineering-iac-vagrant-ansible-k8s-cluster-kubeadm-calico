@@ -62,12 +62,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log_step "Guard 2/2 — key directory must be outside the repo (D20)"
+log_step "Guard 2/2 — key directory must never be committable (D20)"
 
 KEYS_DIR="$(vault_poc_keys_dir)"
-assert_path_outside_repo "$KEYS_DIR"
+assert_keys_path_safe "$KEYS_DIR"
 KEYS_FILE="${KEYS_DIR}/vault-init.json"
-log_ok "keys directory: ${KEYS_DIR} (0700, outside the repo)"
+log_ok "keys directory: ${KEYS_DIR} (outside the repo, or gitignored and untracked)"
 
 # ---------------------------------------------------------------------------
 log_step "Initialise"

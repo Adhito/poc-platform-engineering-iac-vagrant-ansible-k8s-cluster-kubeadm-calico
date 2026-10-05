@@ -32,7 +32,7 @@ require_vault_env
 require_vault_authenticated
 
 SNAP_DIR="${VAULT_POC_SNAPSHOTS:-$(vault_poc_keys_dir)/snapshots}"
-assert_path_outside_repo "$SNAP_DIR"
+assert_keys_path_safe "$SNAP_DIR"
 mkdir -p "$SNAP_DIR"; chmod 0700 "$SNAP_DIR"
 
 STAMP="$(date +%F-%H%M%S)"

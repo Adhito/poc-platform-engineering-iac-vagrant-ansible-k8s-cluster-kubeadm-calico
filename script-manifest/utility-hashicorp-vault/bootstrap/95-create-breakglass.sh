@@ -48,7 +48,7 @@ require_vault_env
 require_vault_authenticated     # this is the root (bootstrap) token
 
 KEYS_DIR="$(vault_poc_keys_dir)"
-assert_path_outside_repo "$KEYS_DIR"
+assert_keys_path_safe "$KEYS_DIR"
 PW_FILE="${KEYS_DIR}/breakglass-userpass.txt"
 
 PASS=0; FAIL=0

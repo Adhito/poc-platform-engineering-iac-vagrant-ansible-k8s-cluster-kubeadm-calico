@@ -34,9 +34,9 @@ On the Dev VM (`192.168.56.20`), with `vault`, `kubectl`, `jq`, `gpg`, `openssl`
 ```bash
 export VAULT_ADDR=https://192.168.56.241:8200      # MetalLB VIP (D8 primary)
 export VAULT_CACERT=/etc/vault-poc/ca.crt          # CA that signed Vault's cert
-# Keys on the Windows host via the Dev VM's shared folder, so they survive a Dev VM
-# destroy. See documents/key-custody.md for the trade-off (vboxsf ignores chmod).
-export VAULT_POC_KEYS="$HOME/workspace-app/.credentials/vault-poc"
+# Keys in this repo's gitignored .credentials/ folder (on the Windows host, via the
+# Dev VM's shared folder). See documents/key-custody.md for the accepted risks.
+export VAULT_POC_KEYS="$HOME/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/.credentials/vault-poc"
 ```
 
 The `vault` CLI must match the server (2.0.4). Install the release binary, checksum-verified:
@@ -91,7 +91,7 @@ Use the same NodePort address whenever MetalLB itself is broken.
 After `00`:
 
 ```bash
-export VAULT_TOKEN="$(jq -r .root_token ~/.credentials/vault-poc/vault-init.json)"
+export VAULT_TOKEN="$(jq -r .root_token $VAULT_POC_KEYS/vault-init.json)"
 ```
 
 ## The two things most likely to bite
@@ -111,12 +111,19 @@ JWT carries an `exp`.
 
 ## Key custody (D20)
 
-Unseal keys go to `~/.credentials/vault-poc/vault-init.json`, mode `0600`, in a
-`0700` directory — **outside the repo tree**, asserted before anything is
-written. In-repo plus `.gitignore` is not sufficient: `git clean -xfd` deletes
-gitignored files by design, and `git add -f` bypasses `.gitignore` entirely.
+Unseal keys go to `$VAULT_POC_KEYS/vault-init.json` (default
+`$VAULT_POC_KEYS`). **On this project, `VAULT_POC_KEYS` is the repo's own
+gitignored `.credentials/vault-poc/`** (the owner's decision, 2026-10-05; see
+[`../documents/key-custody.md`](../documents/key-custody.md)).
 
-Override the location with `VAULT_POC_KEYS`; the assertion still applies.
+Before anything is written, `assert_keys_path_safe` checks that the path is either
+outside the repo, or inside it but **gitignored and untracked**. Otherwise it refuses.
+That guarantees the keys can't be committed by an ordinary `git add`. It can't protect
+against these, so treat them as rules:
+
+- **Never run `git clean -xfd` (or `-X`) in this repo.** It deletes ignored files, the
+  unseal keys included.
+- **Never `git add -f`** anything under `.credentials/`.
 
 A **password-manager copy is owed** and is part of A2's exit gate, along with
 actually restoring from it once. A backup you have never read from is a
