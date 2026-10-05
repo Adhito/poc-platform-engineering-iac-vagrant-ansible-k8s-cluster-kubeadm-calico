@@ -229,7 +229,7 @@ scripts.
 ## Delivery: GitOps, and why two roots
 
 ```
-root-platform.yaml          (this repo)      applied Phase A1
+root-platform.yaml          (this repo)      applied Phase A1 — ArgoCD app `utility-hashicorp-vault`
   ├── wave 0  vault-extras          cert · reviewer Secret · CRB · Services
   ├── wave 1  vault                 Helm chart + git values (multi-source)
   ├── wave 3  external-secrets      ESO chart

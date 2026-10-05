@@ -386,9 +386,9 @@ log "  passed=${N_PASS}  failed=${N_FAIL}  warned=${N_WARN}  skipped=${N_SKIP}"
 log ""
 
 if (( N_FAIL > 0 )); then
-  log_err "${N_FAIL} hard blocker(s). Do not apply root-platform yet."
+  log_err "${N_FAIL} hard blocker(s). Do not apply the root app (argocd/root-platform.yaml) yet."
 else
-  log_ok "no hard blockers — safe to apply root-platform"
+  log_ok "no hard blockers — safe to apply the root app: kubectl apply -f script-manifest/utility-hashicorp-vault/argocd/root-platform.yaml"
 fi
 
 cat >&2 <<'EOF'

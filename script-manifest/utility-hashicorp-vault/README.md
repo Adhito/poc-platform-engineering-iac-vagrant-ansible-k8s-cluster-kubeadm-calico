@@ -39,8 +39,8 @@ the apps team logged their `docs/` → `documents/` change.
 ```
 script-manifest/utility-hashicorp-vault/
 ├── argocd/
-│   ├── root-platform.yaml            # app-of-apps root — applied Phase A1
-│   ├── applications/                 # synced by root-platform
+│   ├── root-platform.yaml            # app-of-apps root (ArgoCD app `utility-hashicorp-vault`) — applied Phase A1
+│   ├── applications/                 # synced by the root app
 │   │   ├── vault-extras.yaml         # wave 0 · cert, reviewer Secret, CRB, Services
 │   │   ├── vault.yaml                # wave 1 · multi-source Helm chart + git values
 │   │   ├── external-secrets.yaml     # wave 3 · ESO chart
@@ -192,6 +192,9 @@ Phase A1 applies **only** the platform root (D19):
 kubectl apply -f script-manifest/utility-hashicorp-vault/argocd/root-platform.yaml
 ```
 
+It appears in ArgoCD as **`utility-hashicorp-vault`**. Don't rename it once applied: that
+means deleting it, and its finalizer cascade-deletes every child, Vault included.
+
 Sync waves order the children:
 
 | Wave | Child | Why this order |
@@ -231,7 +234,7 @@ write a policy, because Vault has its own API and authorization language. That i
 `bootstrap/` — imperative and idempotent by design (D9), with its own
 [README](bootstrap/README.md).
 
-Run order, after `root-platform` has synced and Vault is running:
+Run order, after the root app (`utility-hashicorp-vault`) has synced and Vault is running:
 
 | # | Script | Phase |
 |---|---|---|

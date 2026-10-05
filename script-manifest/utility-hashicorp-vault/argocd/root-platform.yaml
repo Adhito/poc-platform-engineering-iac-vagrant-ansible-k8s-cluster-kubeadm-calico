@@ -1,5 +1,10 @@
 # Stage A root Application — app-of-apps (D19). Applied in Phase A1.
 #
+# Named `utility-hashicorp-vault` (what the ArgoCD UI shows), matching this repo's
+# script-manifest/utility-* convention. The file keeps the PRD's "platform root"
+# name. Renaming a LIVE Application means deleting it, and the finalizer below
+# would then cascade-delete every child — Vault included. Don't rename it once applied.
+#
 # ############################################################################
 # THIS IS THE PLATFORM ROOT ONLY.
 #
@@ -9,15 +14,14 @@
 # crash-loop that reads as an application bug and is actually a sequencing
 # error. Two roots are what preserve the phase gate.
 #
-# TODO(A1): ArgoCD cannot resolve this repo's actual git remote, which is an SSH
-# host alias (`git@github.com-adhito909:...`). The HTTPS URL below needs a
-# credential registered in ArgoCD, or swap to a plain SSH URL with a deploy key.
-# The vault repo hit this identical problem — same fix, both repos.
+# repoURL is the HTTPS URL, not this repo's SSH host alias (`github.com-adhito909`),
+# which ArgoCD can't resolve. The repo is public, so no ArgoCD credential is
+# needed; if it is ever made private, register one or use a deploy key.
 # ############################################################################
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: root-platform
+  name: utility-hashicorp-vault
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
