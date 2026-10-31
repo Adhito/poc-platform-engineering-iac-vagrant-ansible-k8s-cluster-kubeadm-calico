@@ -20,3 +20,13 @@ metadata:
 spec:
   ipAddressPools:
     - local-pool
+  # Announce ONLY on the host-only network the pool belongs to (192.168.56.0/24).
+  # Without this, MetalLB answers ARP on every interface, including eth0, the
+  # VirtualBox NAT adapter. VirtualBox's NAT engine then keeps "re-guessing" the
+  # guest's address from those gratuitous ARPs (VBox.log: "NAT: Guest address guess
+  # changed from 10.0.2.15 to 192.168.56.240") and degrades; on 2026-10-31 the
+  # control plane's NAT ran out of buffers ("NAT: Can't allocate mbuf"), killing
+  # its internet access and `vagrant ssh`. CoreDNS runs there, so cluster DNS
+  # failed and ArgoCD could not reach GitHub (sync status Unknown).
+  interfaces:
+    - {{ metallb_l2_interface }}
