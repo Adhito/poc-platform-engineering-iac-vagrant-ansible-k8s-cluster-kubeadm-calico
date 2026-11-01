@@ -256,13 +256,15 @@ Record custody events here. **Events only — never contents.**
 
 | Date | Event | Performed by | Verified |
 |---|---|---|---|
-| ______ | `operator init` — 5 shares / threshold 3 | ______ | — |
-| ______ | Password-manager copy created | ______ | ______ |
+| 2026-10-05 | `operator init` — 5 shares / threshold 3 | Adhito | — |
+| 2026-11-01 | Break-glass identity created and verified (`95-`) | Adhito | `95-` 9/9 PASS, live login |
+| 2026-11-01 | `generate-root` exercised once, via break-glass (A6 gate) | Adhito | Decoded token had policy `root`; that token revoked straight after |
+| 2026-11-01 | **Shares exposed**: all five shown in a screenshot, one pasted, in an AI-assistant chat session while debugging the step above | Adhito | — |
+| 2026-11-01 | Rekey, 5 shares / threshold 3 (`85-rekey.sh`, `require_verification`), same day as the exposure. The pre-rekey file was deleted | Adhito | 3/3 new shares verified from the saved file before the switch; Vault still unsealed |
+| 2026-11-01 | Password-manager copy replaced with the post-rekey `vault-init.json` | Adhito | Not yet read back — see the A2 row |
 | ______ | Restore verified from second copy (A2 gate) | ______ | ______ |
-| ______ | Break-glass identity created and verified (`95-`) | ______ | ______ |
 | ______ | Break-glass password added to the password-manager note | ______ | ______ |
 | ______ | Root token revoked (A6, D10) | ______ | ______ |
-| ______ | `generate-root` exercised once, via break-glass (A6 gate) | ______ | ______ |
 
 ---
 
