@@ -222,7 +222,14 @@ shares that reconstruct it are replaced.
 
 **On Vault 2.x, `sys/rekey` is authenticated.** In 1.x the shares alone were
 enough; on 2.x you first need a token allowed to call it. After A6 revokes root,
-that token comes from the break-glass login (`bootstrap/95-create-breakglass.sh`):
+that token comes from the break-glass login (`bootstrap/95-create-breakglass.sh`).
+
+**Prefer the script:** `bootstrap/85-rekey.sh` does the steps below without ever
+printing the new shares: it writes them straight into `vault-init.json`, and
+it requests `require_verification`, so the old shares stay valid until the new
+ones have been read back from the saved file and accepted. The manual commands
+below print the new shares to the terminal, which is how shares end up in
+screenshots and chat logs.
 
 ```bash
 export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
