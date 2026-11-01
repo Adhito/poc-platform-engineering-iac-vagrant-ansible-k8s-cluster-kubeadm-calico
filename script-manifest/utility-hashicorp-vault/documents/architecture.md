@@ -80,6 +80,13 @@ the part where the security value actually lives.
 Audit goes to `stdout`, read with `kubectl logs`. Not shipped to Loki — that
 would mean editing the observability team's log pipeline.
 
+**Retention is pod log rotation, and nothing more.** The kubelet keeps a few
+rotated log files per container (by default 5 files of 10 MiB), and they are
+deleted with the pod: a reschedule, a node rebuild or a `kubectl delete pod`
+loses the audit trail up to that point. Not adequate for production, where audit
+must be shipped somewhere durable before it rotates. Secret values in it are
+HMAC'd (`hmac-sha256:...`), verified by eye on 2026-11-01 (A9.1 step 3).
+
 ---
 
 ## Components
