@@ -9,6 +9,7 @@ who owns it, and what would trigger picking it up. Remove an entry when it's don
 | 2 | [Dashboard archived; its manifest overrides the pinned metrics-server](#2--dashboard-archived-its-manifest-overrides-the-pinned-metrics-server) | this repo | Waiting on its JIRA ticket | 2026-09-22 |
 | 3 | [Guardrails for the Platform / SRE ingress boundary](#3--guardrails-for-the-platform--sre-ingress-boundary) | Platform (this repo) | Not started | 2026-09-23 |
 | 4 | [No Vault login method for human developers](#4--no-vault-login-method-for-human-developers) | Platform (this repo) | Not started | 2026-10-05 |
+| 5 | [DNS over UDP is dropped on the host's network](#5--dns-over-udp-is-dropped-on-the-hosts-network) | Platform (this repo) | CoreDNS hotfixed live; nodes not fixed | 2026-11-01 |
 
 ---
 
@@ -128,4 +129,47 @@ debugging needs, and an audit trail (`60-enable-audit.sh` already logs every req
 
 **Picking it up — triggers:** the first developer who needs to read a secret directly, or
 Stage B debugging that can't be done through the workloads.
+
+---
+
+## 5 — DNS over UDP is dropped on the host's network
+
+**What:** on 2026-11-01 the Windows host's network (home Wi-Fi) stopped answering DNS
+over UDP for every server except the ISP's own resolver (`203.142.84.222`). The router
+(`192.168.1.1`), `8.8.8.8` and `1.1.1.1` all time out over UDP, from Windows and from the
+VMs alike. DNS over **TCP** to `8.8.8.8` / `1.1.1.1` still works. VirtualBox's NAT DNS
+(`10.0.2.3`) forwards to the router first, so it times out too.
+
+The cluster's resolvers (`network.dns_servers` in `settings.yaml`, plus `10.0.2.3`) are all
+UDP, so CoreDNS failed every upstream lookup and Argo CD could not resolve `github.com`
+(sync status `Unknown`). This was found while recovering from the MetalLB `eth0` ARP
+problem (fixed by restricting the `L2Advertisement` to `eth1`); both broke DNS at the same
+time.
+
+**Hotfix applied live (not in code):** CoreDNS forwards over TCP:
+
+```bash
+kubectl --kubeconfig configs/config -n kube-system get cm coredns -o yaml \
+  | sed 's#forward \. /etc/resolv\.conf {#forward . 8.8.8.8 1.1.1.1 {\n        force_tcp#' \
+  | kubectl --kubeconfig configs/config replace -f -
+```
+
+**Still open:**
+1. **The hotfix is not in code.** The `coredns` ConfigMap is kubeadm-managed, so a
+   `kubeadm upgrade` or a cluster rebuild reverts it. Make it a `control_plane` role task,
+   or decide it is not needed (see trigger below).
+2. **Node-level DNS is still UDP.** `systemd-resolved` on each node (`common` role,
+   `dns.yaml`) uses the same servers, and CRI-O resolves registries through it. Images
+   already on a node are unaffected; pulling a **new** image can fail. The usual fix is
+   VirtualBox's host resolver (`vb.customize ["modifyvm", :id, "--natdnshostresolver1",
+   "on"]` in the Vagrantfile), which makes `10.0.2.3` answer whenever Windows can resolve.
+   It applies only on a cold boot (`vagrant reload`), and restarting `devnodeworker02` seals
+   Vault, so plan it with an unseal.
+
+**Why deferred:** the hotfix unblocked the cluster without restarting any VM, and it is
+not yet known whether this is a lasting property of the network or a temporary outage.
+
+**Picking it up — triggers:** an image pull failing with a DNS error, a `kubeadm upgrade`
+or rebuild (re-check CoreDNS afterwards), or confirming that UDP DNS is back
+(`dig +short github.com @8.8.8.8` from a node), in which case the hotfix can be reverted.
 

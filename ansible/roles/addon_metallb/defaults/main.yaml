@@ -1,4 +1,6 @@
 ---
 metallb_version: ""
 metallb_namespace: metallb-system
+# The host-only NIC (Vagrant's private_network). eth0 is VirtualBox NAT: never announce there.
+metallb_l2_interface: eth1
 configs_path: /vagrant/configs
