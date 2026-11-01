@@ -39,6 +39,7 @@ PG_SECRET="postgres-admin"
 PG_HOST="postgres.${APP_NS}.svc"
 PG_DB="appdb"
 PG_ADMIN_USER="vaultadmin"
+PG_POD="postgres-0"
 
 require_cmd vault jq kubectl
 require_vault_env
@@ -95,10 +96,16 @@ log_step "Create the ${ROLE} role"
 # creation_statements run as vaultadmin, per generated credential.
 # GRANT SELECT covers tables existing at that moment — the seed ConfigMap also
 # sets ALTER DEFAULT PRIVILEGES so later tables are not invisible to new roles.
+#
+# revocation_statements must undo that GRANT before dropping the role: PostgreSQL
+# refuses to DROP a role that still holds privileges ("cannot be dropped because
+# some objects depend on it"). Vault runs revocation in the background, so with
+# a bare DROP ROLE `vault lease revoke` still reports success while the user
+# stays alive until its VALID UNTIL, and Vault retries and logs the error.
 vault write "${MOUNT}/roles/${ROLE}" \
   db_name="$CONN" \
   creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{name}}\";" \
-  revocation_statements="DROP ROLE IF EXISTS \"{{name}}\";" \
+  revocation_statements="REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM \"{{name}}\"; DROP ROLE IF EXISTS \"{{name}}\";" \
   default_ttl="1h" \
   max_ttl="24h" >/dev/null
 
@@ -134,16 +141,36 @@ LEASE_TTL="$(jq -r '.lease_duration' <<<"$CRED")"
 log_ok "issued user=${GEN_USER} lease=${LEASE_ID} ttl=${LEASE_TTL}s"
 
 vault lease revoke "$LEASE_ID" >/dev/null
-log_ok "revoked the test lease (the role is dropped in PostgreSQL)"
+
+# A successful `lease revoke` only means Vault accepted it; the DROP ROLE runs in
+# the background and a failure there is only logged. Check PostgreSQL itself.
+# (Over the pod's local socket, which the image trusts: anyone who can exec into
+# the pod is a database admin. Acceptable for the POC.)
+role_count() {
+  kubectl -n "$APP_NS" exec "$PG_POD" -- \
+    psql -U "$PG_ADMIN_USER" -d "$PG_DB" -tAc \
+    "SELECT count(*) FROM pg_roles WHERE rolname = '${GEN_USER}'"
+}
+for _ in 1 2 3 4 5; do
+  [[ "$(role_count)" == "0" ]] && break
+  sleep 2
+done
+[[ "$(role_count)" == "0" ]] \
+  || die "lease ${LEASE_ID} was revoked but role ${GEN_USER} still exists in PostgreSQL.
+     Look for 'failed to revoke lease' in: kubectl -n vault logs vault-0"
+log_ok "revoked the test lease, and role ${GEN_USER} is gone from PostgreSQL"
 
 cat >&2 <<EOF
 
   Still owed by A7's exit gate — the part this script cannot prove alone:
+  watch a revoked credential stop WORKING, not just disappear. psql has to run
+  inside the cluster (the Service is ClusterIP); use kubectl exec into ${PG_POD}
+  and connect over the pod IP, since localhost is trusted without a password:
     vault read ${MOUNT}/creds/${ROLE}          # note username + lease_id
-    psql -h <host> -U <generated-user> ${PG_DB}  # must SUCCEED
+    psql -h <pod-ip> -U <generated-user> ${PG_DB}  # must SUCCEED
     vault lease revoke <lease_id>
-    psql -h <host> -U <generated-user> ${PG_DB}  # must now FAIL
-    # then in psql as an admin:  \\du   -> the role must be GONE
+    psql -h <pod-ip> -U <generated-user> ${PG_DB}  # must now FAIL
+    # then as an admin:  \\du   -> the role must be GONE
 
   A revocation you have not watched fail is not a proven revocation.
 
