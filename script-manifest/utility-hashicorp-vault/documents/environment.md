@@ -406,7 +406,7 @@ Deliverables, not observations — they belong here, not in a terminal you will 
 | Snapshot restore RTO | A9.3 | _______ |
 | Prometheus discovery labels | A0.5 | _______ |
 | Alertmanager routing status | A0.5 | _______ |
-| System `default_lease_ttl` / `max_lease_ttl` | A7 | _______ |
+| System `default_lease_ttl` / `max_lease_ttl` | A7 | `0` / `0` (2026-11-01, `30-enable-kv.sh`): unset in the server HCL, so Vault's built-in `768h` / `768h` apply. Mounts and roles set their own (e.g. `level3-app` 1h / 24h) |
 
 ---
 

@@ -106,20 +106,30 @@ check_login external-secrets "$ESO_NS" eso        eso-reader
 # ---------------------------------------------------------------------------
 log_step "Negative — the deliverable"
 
+# A denial only counts if it is the BINDING that denied it. Any login failure
+# would otherwise pass: a mistyped role name ("invalid role name") or a failed
+# `kubectl create token` would read as a successful isolation test.
+expect_binding_denial() {  # ns | sa | role | label
+  local ns="$1" sa="$2" role="$3" label="$4" jwt err
+  jwt="$(kubectl -n "$ns" create token "$sa" --duration=10m 2>/dev/null)" \
+    || { fail "${label}: could not mint a token for ${ns}/${sa} — test inconclusive"; return; }
+  if err="$(vault write -format=json auth/kubernetes/login \
+              role="$role" jwt="$jwt" 2>&1 >/dev/null)"; then
+    fail "${label}: login SUCCEEDED — THE ISOLATION BOUNDARY IS OPEN"
+  elif grep -qi 'not authorized' <<<"$err"; then
+    pass "${label}: denied by the role's binding"
+  else
+    fail "${label}: denied for the WRONG reason — test inconclusive:
+        $(grep -m1 -iE 'error|\*' <<<"$err")"
+  fi
+}
+
 # 1. Right role, wrong ServiceAccount. This is THE test: it proves the SA name
 #    is genuinely load-bearing and not decoration.
-if login_as "$APP_NS" default level2-app >/dev/null 2>&1; then
-  fail "SA 'default' obtained role level2-app — THE ISOLATION BOUNDARY IS OPEN"
-else
-  pass "SA 'default' denied role level2-app"
-fi
+expect_binding_denial "$APP_NS" default level2-app "SA 'default' -> role level2-app"
 
-# 2. A real app SA reaching for someone else's role.
-if login_as "$APP_NS" level1-app level4-pgp >/dev/null 2>&1; then
-  fail "level1-app obtained role level4-pgp — cross-level login is possible"
-else
-  pass "level1-app denied role level4-pgp"
-fi
+# 2. A real app SA reaching for someone else's role (Level 1 -> Level 4's PGP).
+expect_binding_denial "$APP_NS" level1-app level4-app "level1-app -> role level4-app"
 
 # 3. Authorized login, unauthorized path. Login succeeding does not mean the
 #    token may read anything — that is the policy's job, tested separately.

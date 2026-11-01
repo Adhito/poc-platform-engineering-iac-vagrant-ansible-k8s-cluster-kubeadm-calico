@@ -84,6 +84,7 @@ Use the same NodePort address whenever MetalLB itself is broken.
 | 50 | `50-seed-secrets.sh` | A7 | KV values + PGP keypair for Level 4 |
 | 60 | `60-enable-audit.sh` | A9.1 | **Before Stage B** — audit is not retroactive |
 | 70 | `70-verify-access.sh` | A6 | The negative tests. Exits non-zero on failure |
+| 85 | `85-rekey.sh` | as needed | Replace the unseal shares (exposed share, holder change). New shares are written to `vault-init.json`, never printed; old shares stay valid until the new ones are verified from the saved file. `--prompt` to type the current shares |
 | 90 | `90-snapshot.sh` | A9.2 | Raft snapshot |
 | 95 | `95-create-breakglass.sh` | A6 | **Vault 2.0 requires it.** `generate-root` is authenticated on 2.x, so once root is revoked this identity is the only way back. Creates it, then proves it |
 | 99 | `99-revoke-root.sh` | A6 | **Last.** Preflights the whole bootstrap first — including a live break-glass login |

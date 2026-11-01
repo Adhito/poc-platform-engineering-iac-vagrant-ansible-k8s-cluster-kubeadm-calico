@@ -146,8 +146,9 @@ EOF
     ${ARTIFACT_DIR}/fixture.txt.pgp
 
   That file is CIPHERTEXT and safe to commit — it ships with Stage B Level 4.
-  It is written outside the repo only because it is produced alongside key
-  material; move it deliberately rather than leaving it here.
+  It is written next to the unseal keys (outside the repo, or in its gitignored
+  keys folder) only because it is produced alongside key material; copy it
+  deliberately into the Stage B repo rather than leaving it here.
 
   Note it is named .pgp, not .asc: the repo .gitignore excludes *.asc to catch
   exported KEYS, and this ciphertext is meant to be committed.
