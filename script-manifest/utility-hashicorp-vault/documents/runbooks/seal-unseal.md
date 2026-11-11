@@ -42,10 +42,15 @@ Three consequences worth internalising:
 
 ## Detection
 
-### Primary — the `VaultNodeSealed` alert
+### Primary — the `VaultNodeSealed` alert (**not deployed on this cluster**)
 
 `vault_core_unsealed == 0`, per peer, firing after 5 minutes.
 Defined in `base/monitoring/prometheusrule.yaml`.
+
+> **Today this alert does not exist.** `vault-monitoring` is parked in
+> `argocd/disabled/` because the cluster has no Prometheus Operator CRDs
+> ([`../environment.md`](../environment.md) 5a). Until that changes, the
+> [manual check](#manual-check) below is **the only detection**.
 
 > **Do not trust this alert until it has been fired on purpose.** Phase A9.4
 > requires sealing a follower and watching it fire. Until that test passes,
@@ -143,8 +148,15 @@ Or per peer, without going through the network:
 kubectl -n vault exec -it vault-1 -- vault operator unseal
 ```
 
-**Three different shares.** The same share entered three times does not count —
-Vault tracks distinct shares and will sit at `Unseal Progress 1/3`.
+**Three different shares.** The same share entered three times does not count.
+Vault tracks distinct shares and will sit at `Unseal Progress 1/3`. Some endpoints
+(`generate-root`, `rekey`) instead answer `given key has already been provided`.
+
+**Which value is a share?** `vault-init.json` lists every share twice, as
+`unseal_keys_b64` and `unseal_keys_hex`. Use the **`unseal_keys_b64`** entries, one
+array element per prompt: `[0]`, `[1]`, `[2]`, or any three. Don't mix in the hex
+list. A hex entry is the same share in a different encoding, so it counts as a
+repeat.
 
 ### Step 3 — verify
 
@@ -163,6 +175,11 @@ VAULT_ADDR=https://192.168.56.10:30004 vault status
 ---
 
 ## Quorum: what this cluster can and cannot survive
+
+> **Current state (2026-11-01): one replica**, `vault-0` on `devnodeworker02`. D3
+> phases the count: 1 until Phase A4, then 3. Until A4, there is no quorum to lose:
+> one pod restart means one sealed Vault and a full outage until it is unsealed.
+> The rest of this section describes the A4 target.
 
 **This cluster runs 3-node Raft to exercise Raft, not to achieve availability.**
 
@@ -186,14 +203,23 @@ outright** — it cannot reschedule. See
 ## Key custody
 
 **POC arrangement:** all five shares live together in
-`$VAULT_POC_KEYS/vault-init.json` on the dev workspace host, mode `0600`
-in a `0700` directory, **outside the repo tree**, with a copy in a password
-manager.
+`$VAULT_POC_KEYS/vault-init.json`, with a copy in a password manager. Since
+2026-10-05 (the owner's decision, DEV only), `$VAULT_POC_KEYS` is this repo's
+**gitignored** `.credentials/vault-poc/`, next to `breakglass-userpass.txt` and the
+snapshots.
 
-Outside the repo because `.gitignore` is not sufficient: `git clean -xfd` deletes
-gitignored files *by design* — that is what `-x` means — and it is exactly what
-gets run when resetting a working tree. `git add -f` bypasses `.gitignore` too.
-`bootstrap/lib/common.sh` asserts the path is outside the repo and aborts if not.
+`.gitignore` alone is not protection: `git clean -xfd` deletes gitignored files
+*by design* (that is what `-x` means), and it is exactly what gets run when
+resetting a working tree. `git add -f` bypasses `.gitignore` too. Two
+mechanical guards and two rules cover that:
+
+- **Guard:** `assert_keys_path_safe` in `bootstrap/lib/common.sh` refuses any in-repo
+  path that git doesn't ignore, or under which anything is tracked.
+- **Rules:** never `git clean -xfd` / `-X` here, and never `git add -f` under `.credentials/`.
+
+[`../key-custody.md`](../key-custody.md) has the full decision, the accepted risks
+(including the `/vagrant` mount into every node), and what STG/PRD must do
+instead.
 
 **What a real arrangement requires, and what we are deliberately not doing:**
 five shares to five separate holders, threshold three, no single person able to
@@ -210,7 +236,23 @@ never the shares.**
 
 > **A backup you have never read from is a hypothesis.** A2's exit gate requires
 > sealing a node and unsealing it from a share retrieved out of the
-> password-manager copy, not the working file.
+> password-manager copy, not the working file. *Still open as of 2026-11-01.*
+>
+> Break-glass has no `sys/seal` permission, so do it by restarting the pod, which
+> always seals: `kubectl -n vault delete pod vault-0`. Wait for `Running 0/1`, then
+> unseal through the NodePort. Paste three `unseal_keys_b64` entries **from the
+> password manager** into the hidden `vault operator unseal` prompt. Pick ones the
+> scripts haven't used, for example `[2]`–`[4]`.
+
+### How shares actually leak
+
+On 2026-11-01, while debugging the generate-root rehearsal, all five shares
+appeared in a screenshot and one share was pasted into an AI-assistant chat.
+Nothing was committed, but a share sent to a third-party service counts as exposed.
+They were rekeyed the same day (`bootstrap/85-rekey.sh`); the register in
+`key-custody.md` records it. **When asking for help, share command output and
+error text. Never share `vault-init.json`, a terminal showing it, or a share
+"just to check the format".**
 
 ---
 
@@ -242,6 +284,13 @@ vault operator rekey -nonce=<nonce>                          # x3, one per curre
 The new shares are printed **once**. Distribute and store them before you close
 the terminal, then destroy the old `vault-init.json` and update the
 password-manager copy.
+
+After `85-rekey.sh`, the owed steps are:
+1. Copy the new file into the password manager without displaying it. On Windows
+   Git Bash at the repo root: `clip.exe < .credentials/vault-poc/vault-init.json`.
+   Then clear the clipboard and the Win+V history.
+2. Delete the `vault-init.pre-rekey-<stamp>.json` the script leaves behind.
+3. Add a row to the register in `key-custody.md`.
 
 > Snapshots taken before a rekey are still restorable with the **new** shares —
 > rekey does not change the master key, so it does not orphan backups.
@@ -276,7 +325,23 @@ vault operator generate-root -decode=<encoded-token> -otp="$OTP"
 
 **Exercise this once, while you still have a working root** (A6 exit gate). A
 recovery path you have never walked is a hypothesis. Revoke the regenerated token
-when the task that needed it is done.
+when the task that needed it is done. *Exercised 2026-11-01, via break-glass. The
+decoded token carried policy `root` and was revoked straight after.*
+
+What tripped it up in practice:
+
+- **One shell, start to finish.** `$OTP` and the break-glass `VAULT_TOKEN` are shell
+  variables. Logging out of the Dev VM mid-procedure loses both. The attempt then
+  stays open on the server, and a new `-init` is refused. Log in as break-glass
+  again, run `vault operator generate-root -cancel`, and start over from step 2.
+- **The break-glass token lasts 15 minutes.** Have the three shares to hand
+  *before* step 1.
+- **Shares:** three *different* `unseal_keys_b64` entries (see [Step 2](#step-2--unseal)).
+  The prompt hides input, and the progress counter shows whether a share was accepted.
+- **Don't print the result.** Capture the decoded token straight into the
+  shell, for example
+  `export VAULT_TOKEN="$(vault operator generate-root -decode=<encoded-token> -otp="$OTP")"`,
+  and revoke it with `vault token revoke -self` when done.
 
 ### Last resort — break-glass lost as well
 

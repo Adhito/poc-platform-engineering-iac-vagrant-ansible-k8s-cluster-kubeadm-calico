@@ -24,6 +24,11 @@ just printed are **discarded** — the restore brings the old seal back with it.
 This is the single most counter-intuitive part of Vault DR, and the reason the
 drill exists.
 
+"Original" means **the cluster's current shares**, the ones in `vault-init.json`
+now, not the ones `operator init` printed on day one. A rekey replaces the shares
+but not the root key they reconstruct, so after the 2026-11-01 rekey, every older
+snapshot unseals with the *new* shares, and the pre-rekey shares open nothing.
+
 ---
 
 ## Where snapshots live
@@ -32,9 +37,15 @@ drill exists.
 $VAULT_POC_KEYS/snapshots/vault-<YYYY-MM-DD-HHMMSS>.snap
 ```
 
-Beside the keys, mode `0600`, **outside the repo tree** — same reasoning as the
-keys themselves (`git clean -xfd` deletes gitignored files by design). Override
-with `VAULT_POC_SNAPSHOTS`; the outside-the-repo assertion still applies.
+Beside the keys, mode `0600`. On this cluster that's the repo's **gitignored**
+`.credentials/vault-poc/snapshots/` (owner's decision 2026-10-05, DEV only; see
+[`../key-custody.md`](../key-custody.md)). `.gitignore` also covers `*.snap`. Override
+with `VAULT_POC_SNAPSHOTS`; `assert_keys_path_safe` still refuses any in-repo path
+that git doesn't ignore. **`git clean -xfd` would delete them along with the keys.**
+
+Taken so far: `vault-2026-11-01-184208.snap` (72K, after the full bootstrap,
+before the rekey). It is still restorable with the **current** shares: a rekey
+replaces the shares, not the key they reconstruct.
 
 Retention: the 10 most recent, pruned automatically by `90-snapshot.sh`.
 
@@ -55,6 +66,14 @@ export VAULT_TOKEN=<a token with sys/storage/raft/snapshot read>
 
 ./90-snapshot.sh
 ```
+
+> **Which token, now that root is revoked (2026-11-01).** No policy grants
+> `sys/storage/raft/snapshot` yet, and `breakglass-admin` covers only
+> generate-root and rekey. So today a snapshot needs a **regenerated root**
+> ([`seal-unseal.md`](seal-unseal.md) → *Generate a new root token*), revoked
+> afterwards. **Planned fix:** a narrow `snapshot` policy (`read` on
+> `sys/storage/raft/snapshot`) bound to its own identity. That identity is also what
+> the CronJob below would need.
 
 By hand:
 
@@ -121,6 +140,22 @@ top of this page cannot be learned any other way, and all three surprise people.
 It is also where the RTO number comes from.
 
 Run it once, deliberately, so none of it is a discovery during an incident.
+
+**Before you start (as of 2026-11-01):**
+- Root is revoked, and the drill needs root-level tokens:
+  - **Steps 1–2:** a regenerated root ([`seal-unseal.md`](seal-unseal.md)). Generate it
+    *before* step 1, so it's inside the snapshot too. Keep it in a variable and stay in
+    the same shell.
+  - **Step 7** runs against the fresh, empty instance, which knows none of the old
+    tokens. Use that instance's own root from step 6:
+    `VAULT_TOKEN="$(jq -r .root_token /tmp/throwaway-init.json)"`.
+  - **Step 10:** switch back to the regenerated root. The restore brought it back.
+    **Revoke it when done**: the snapshot made it live again, so a revocation from
+    before the restore no longer applies.
+- Step 4's `vagrant ssh` loop runs on **Windows Git Bash** from the repo root;
+  everything else runs in the Dev VM.
+- With replicas = 1, the VIP has no endpoint until step 6 unseals the fresh pod.
+  Use the NodePort (`https://192.168.56.10:30004`) from step 5 until step 8.
 
 ```bash
 # 1. Snapshot.

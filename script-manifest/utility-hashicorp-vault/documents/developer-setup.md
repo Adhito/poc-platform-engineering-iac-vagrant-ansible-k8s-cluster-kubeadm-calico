@@ -137,7 +137,7 @@ VAULT_ADDR=https://192.168.56.10:30004 vault status
 
 ## 5. Getting access (logging in)
 
-> **Not available yet for humans.** As of 2026-10-05, Vault has no developer login
+> **Not available yet for humans.** As of 2026-11-01, Vault has no developer login
 > method. It has:
 > - **Kubernetes auth roles for workloads** (`level1-app` … `level4-app`, `eso`). Pods use
 >   these, people don't.
@@ -145,7 +145,7 @@ VAULT_ADDR=https://192.168.56.10:30004 vault status
 >   procedure only, and its password is held with the unseal keys
 >   ([`key-custody.md`](key-custody.md)). Never use it for day-to-day work.
 >
-> The root token is revoked once the bootstrap is done (`99-revoke-root.sh`). Until a
+> The root token was revoked on 2026-11-01, when the bootstrap finished (`99-revoke-root.sh`). Until a
 > developer login method exists (tracked in the cluster repo's
 > `documents/DOCUMENTS-backlog.md`), you can use unauthenticated endpoints
 > (`vault status`, `/v1/sys/health`) and inspect workloads through Kubernetes. For
@@ -165,6 +165,8 @@ VAULT_ADDR=https://192.168.56.10:30004 vault status
 | `vault: command not found` in a new shell | `/usr/local/bin` not on `PATH`, or the install step failed | `ls -l /usr/local/bin/vault`; redo step 1 |
 | Variables missing in a new shell | `~/.bashrc` line not added | Redo step 3 |
 | `kubectl` fails in step 2 | Stale or missing kubeconfig on the Dev VM | See *Before you start* |
+| `vault status` hangs or `no route to host` on `.241`, but the NodePort answers `Sealed true` | Vault is sealed, so the VIP has no active pod to route to | **Stop.** Same as `Sealed true` above |
+| Commands worked, then fail after you reconnect | A Dev VM logout drops shell variables that weren't put in `~/.vault-poc.env` | Re-open the shell, or redo step 3 |
 
 ---
 
