@@ -158,7 +158,10 @@ server:
         cluster_addr = "https://$(HOSTNAME).vault-internal:8201"
         ui           = true
 
-    replicas: 1
+    # Phase A4 (D3): 1 -> 3. Scaling up does not restart vault-0 (OnDelete, and
+    # the pod template is unchanged). vault-1 and vault-2 start SEALED and join
+    # through retry_join once unsealed: ./00-init-unseal.sh --all-peers
+    replicas: 3
 
   # D4 — SOFT anti-affinity, and the honest consequence.
   #
