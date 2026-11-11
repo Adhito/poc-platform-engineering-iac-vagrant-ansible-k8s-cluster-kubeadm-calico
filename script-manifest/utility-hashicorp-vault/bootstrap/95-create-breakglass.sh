@@ -171,11 +171,13 @@ cat >&2 <<EOF
   Break-glass is proven. Recovery after root revocation is now:
 
     export VAULT_TOKEN="\$(vault write -field=token auth/${MOUNT}/login/${BG_USER} password=@${PW_FILE})"
+    vault operator generate-root -cancel                    # clears a stale attempt
     OTP="\$(vault operator generate-root -generate-otp)"   # KEEP it: -decode needs the same OTP
-    vault operator generate-root -init -otp="\$OTP"         # note the nonce
-    vault operator generate-root -nonce=<nonce>             # x3, one per unseal share
-    vault operator generate-root -decode=<encoded> -otp="\$OTP"
-    # full procedure: documents/runbooks/seal-unseal.md
+    vault operator generate-root -init -otp="\$OTP"
+    vault operator generate-root                            # x3, one unseal share each
+    ENC="PASTE-THE-ENCODED-TOKEN-HERE"
+    export VAULT_TOKEN="\$(vault operator generate-root -decode="\$ENC" -otp="\$OTP")"
+    # full copy-paste procedure: documents/runbooks/seal-unseal.md
 
   Owed before you continue:
     - the password is in the password-manager note beside vault-init.json

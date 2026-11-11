@@ -310,43 +310,101 @@ you cannot even start this without the break-glass login. That identity can
 *start* a root generation but not finish one: the three unseal shares are still
 required. Two factors, and root never exists at rest.
 
-```bash
-# 1. Authenticate as break-glass (a 15-minute token)
-export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
-    password=@$VAULT_POC_KEYS/breakglass-userpass.txt)"
+Every command below can be pasted exactly as written. The only value you type
+in yourself is the encoded token in step 4. Used on 2026-11-01 (rehearsal) and
+2026-11-11 (to run `96-create-operators.sh`).
 
-# 2. Generate the one-time password and KEEP it — step 4 needs the same value.
-#    Inlining it into -init with $(...) discards it, and the root token that
-#    step 3 produces can then never be decoded.
+**Before you start:**
+- Run it all in **one Dev VM shell, start to finish.** `$OTP` and the break-glass
+  `VAULT_TOKEN` exist only in that shell. Log out and both are lost, while the
+  attempt stays open on the server; then start again from step 1. Step 2's
+  `-cancel` clears the old attempt.
+- The break-glass token lasts **15 minutes**. Open the password manager on
+  three `unseal_keys_b64` entries *before* step 2.
+
+**1. Set up the shell**
+
+```bash
+cd ~/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico
+export VAULT_ADDR=https://192.168.56.241:8200
+export VAULT_CACERT=/etc/vault-poc/ca.crt
+export VAULT_POC_KEYS="$HOME/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico/.credentials/vault-poc"
+```
+
+**2. Log in as break-glass and start a root generation**
+
+```bash
+export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
+    password=@"$VAULT_POC_KEYS/breakglass-userpass.txt")"
+
+# Clears a half-finished attempt; harmless when there is none.
+vault operator generate-root -cancel
+
+# The one-time password. KEEP it in this variable: step 4 needs the same
+# value. Inlining it into -init with $(...) discards it, and the root token
+# can then never be decoded.
 OTP="$(vault operator generate-root -generate-otp)"
 
-# 3. Start the attempt, then supply three shares
-vault operator generate-root -init -otp="$OTP"   # note the nonce
-vault operator generate-root -nonce=<nonce>      # x3, one per key share
+vault operator generate-root -init -otp="$OTP"
+```
 
-# 4. Decode the encoded token returned after the third share
-vault operator generate-root -decode=<encoded-token> -otp="$OTP"
+Expect `Started true`, `Progress 0/3`.
+
+**3. Give three shares: the same command, three times**
+
+```bash
+vault operator generate-root
+```
+
+No `-nonce` option is needed: the CLI finds the open attempt itself and prints
+`Operation nonce: ...`. At the hidden `Unseal Key` prompt, paste one
+`unseal_keys_b64` entry from the password manager:
+
+| Run | Paste entry | Then you see |
+|---|---|---|
+| 1st | `[0]` | `Progress 1/3` |
+| 2nd | `[1]` | `Progress 2/3` |
+| 3rd | `[2]` | `Progress 3/3`, `Complete true`, and an `Encoded Token` line |
+
+Any three **different** entries work (see [Step 2](#step-2--unseal)). Never repeat
+one, and never use the `_hex` list. The encoded token on screen is harmless: it's
+useless without `$OTP`.
+
+**4. Decode it, without printing the root token**
+
+Paste the value shown after `Encoded Token` between the quotes, replacing the
+capital words:
+
+```bash
+ENC="PASTE-THE-ENCODED-TOKEN-HERE"
+export VAULT_TOKEN="$(vault operator generate-root -decode="$ENC" -otp="$OTP")"
+vault token lookup -format=json | jq -r '.data.policies | join(",")'   # expect: root
+```
+
+**5. Do the job that needed root**, for example
+`bash ./script-manifest/utility-hashicorp-vault/bootstrap/96-create-operators.sh`.
+
+**6. Revoke root immediately, even if step 5 failed**
+
+```bash
+vault token revoke -self
+unset VAULT_TOKEN OTP ENC
+```
+
+**7. Prove routine work still runs without root**
+
+```bash
+bash ./script-manifest/utility-hashicorp-vault/bootstrap/90-snapshot.sh              # logs in as snapshot-operator
+bash ./script-manifest/utility-hashicorp-vault/bootstrap/80-onboard-team.sh --verify # logs in as platform-admin
 ```
 
 **Exercise this once, while you still have a working root** (A6 exit gate). A
-recovery path you have never walked is a hypothesis. Revoke the regenerated token
-when the task that needed it is done. *Exercised 2026-11-01, via break-glass. The
-decoded token carried policy `root` and was revoked straight after.*
+recovery path you have never walked is a hypothesis. *Exercised 2026-11-01, via
+break-glass. The decoded token carried policy `root` and was revoked straight
+after.*
 
-What tripped it up in practice:
-
-- **One shell, start to finish.** `$OTP` and the break-glass `VAULT_TOKEN` are shell
-  variables. Logging out of the Dev VM mid-procedure loses both. The attempt then
-  stays open on the server, and a new `-init` is refused. Log in as break-glass
-  again, run `vault operator generate-root -cancel`, and start over from step 2.
-- **The break-glass token lasts 15 minutes.** Have the three shares to hand
-  *before* step 1.
-- **Shares:** three *different* `unseal_keys_b64` entries (see [Step 2](#step-2--unseal)).
-  The prompt hides input, and the progress counter shows whether a share was accepted.
-- **Don't print the result.** Capture the decoded token straight into the
-  shell, for example
-  `export VAULT_TOKEN="$(vault operator generate-root -decode=<encoded-token> -otp="$OTP")"`,
-  and revoke it with `vault token revoke -self` when done.
+Don't use `-nonce=<nonce>` from older notes. Pasted literally, bash reads `<` and
+`>` as redirection and fails with `syntax error near unexpected token`.
 
 ### Last resort — break-glass lost as well
 
@@ -358,7 +416,8 @@ path. The shares still suffice, via an out-of-band config change:
    behaviour. Confirm its exact placement against the 2.0 configuration docs.
 2. Commit, let ArgoCD roll it out, and restart the pods (`OnDelete`). Each comes
    back **sealed** — unseal each one.
-3. Generate root from the shares alone (steps 2–4 above, no login), then run
+3. Generate root from the shares alone (steps 2–4 above, skipping the
+   break-glass login and `unset VAULT_TOKEN` instead), then run
    `95-create-breakglass.sh --rotate` to restore a working break-glass.
 4. **Remove the key again** and roll the pods once more. Leaving it set quietly
    reverses the owner's decision to keep generate-root authenticated.
