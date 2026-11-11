@@ -111,10 +111,13 @@ cat >&2 <<'EOF'
 
         export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
             password=@"${VAULT_POC_KEYS:-$HOME/.credentials/vault-poc}/breakglass-userpass.txt")"
+        vault operator generate-root -cancel                  # clears a stale attempt
         OTP="$(vault operator generate-root -generate-otp)"   # KEEP it for -decode
-        vault operator generate-root -init -otp="$OTP"        # note the nonce
-        vault operator generate-root -nonce=<nonce>           # x3, one per key share
-        vault operator generate-root -decode=<encoded> -otp="$OTP"
+        vault operator generate-root -init -otp="$OTP"
+        vault operator generate-root                          # x3, one share each
+        ENC="PASTE-THE-ENCODED-TOKEN-HERE"
+        export VAULT_TOKEN="$(vault operator generate-root -decode="$ENC" -otp="$OTP")"
+        # copy-paste version: documents/runbooks/seal-unseal.md
 
   Verify that procedure works ONCE before you rely on it — a recovery path you
   have never walked is a hypothesis (A6 exit gate).
