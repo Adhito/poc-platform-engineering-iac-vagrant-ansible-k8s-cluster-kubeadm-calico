@@ -30,6 +30,9 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 require_cmd vault jq
 require_vault_env
+# After 99 there is no root token: with no working token set, log in as the
+# save-only snapshot-operator identity (96-create-operators.sh).
+use_operator_login_if_needed snapshot-operator
 require_vault_authenticated
 
 SNAP_DIR="${VAULT_POC_SNAPSHOTS:-$(vault_poc_keys_dir)/snapshots}"

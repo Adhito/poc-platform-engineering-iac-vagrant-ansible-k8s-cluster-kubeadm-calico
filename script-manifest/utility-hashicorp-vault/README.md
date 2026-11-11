@@ -267,7 +267,9 @@ Run order, after the root app (`utility-hashicorp-vault`) has synced and Vault i
 | 50 | `50-seed-secrets.sh` | A7 — KV values + Level 4 PGP keypair |
 | 60 | `60-enable-audit.sh` | A9.1 — **before Stage B**; audit is not retroactive |
 | 70 | `70-verify-access.sh` | A6 — the negative tests; non-zero exit on failure |
+| 80 | `80-onboard-team.sh` | As needed: onboard another team (`team-<name>` policy, role, KV path) as `platform-admin`; `--verify` audits them |
 | 85 | `85-rekey.sh` | As needed: replace the unseal shares without printing them (run 2026-11-01 after a share exposure) |
+| 96 | `96-create-operators.sh` | Once, after 99, with a regenerated root: the `snapshot-operator` and `platform-admin` logins |
 | 90 | `90-snapshot.sh` | A9.2 |
 | 95 | `95-create-breakglass.sh` | A6 — **the recovery identity Vault 2.0 requires**; proves it before root can go |
 | 99 | `99-revoke-root.sh` | A6 — last; preflights the whole bootstrap, including 95 |

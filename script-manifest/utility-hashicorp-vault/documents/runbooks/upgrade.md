@@ -51,8 +51,8 @@ the time it runs.
 ## Before any upgrade
 
 ```bash
-# 1. Snapshot. This is your only rollback. Root is revoked (2026-11-01), so this
-#    needs a regenerated root token until a snapshot policy exists. See
+# 1. Snapshot. This is your only rollback. With no token set, 90 logs in as the
+#    save-only snapshot-operator (96-create-operators.sh). See
 #    snapshot-restore.md -> "Which token".
 cd script-manifest/utility-hashicorp-vault/bootstrap
 ./90-snapshot.sh

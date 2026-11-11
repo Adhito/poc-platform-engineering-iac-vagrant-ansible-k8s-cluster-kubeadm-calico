@@ -89,9 +89,11 @@ Use the same NodePort address whenever MetalLB itself is broken.
 | 50 | `50-seed-secrets.sh` | A7 | KV values + PGP keypair for Level 4 |
 | 60 | `60-enable-audit.sh` | A9.1 | **Before Stage B** — audit is not retroactive |
 | 70 | `70-verify-access.sh` | A6 | The negative tests. Exits non-zero on failure |
+| 80 | `80-onboard-team.sh` | as needed | Onboard another team: `team-<name>` policy (read `secret/teams/<name>/*`) and Kubernetes auth role bound to its namespace + ServiceAccounts. Runs as `platform-admin`. `--verify` diffs every `team-*` policy and role against the template. Run it after any change |
 | 85 | `85-rekey.sh` | as needed | Replace the unseal shares (exposed share, holder change). New shares are written to `vault-init.json`, never printed; old shares stay valid until the new ones are verified from the saved file. `--prompt` to type the current shares |
 | 90 | `90-snapshot.sh` | A9.2 | Raft snapshot |
 | 95 | `95-create-breakglass.sh` | A6 | **Vault 2.0 requires it.** `generate-root` is authenticated on 2.x, so once root is revoked this identity is the only way back. Creates it, then proves it |
+| 96 | `96-create-operators.sh` | after 99 | **Needs a regenerated root, once.** Creates and proves `snapshot-operator` (save-only snapshots, used by `90`) and `platform-admin` (`team-*` onboarding, used by `80`). Passwords go beside the keys |
 | 99 | `99-revoke-root.sh` | A6 | **Last.** Preflights the whole bootstrap first — including a live break-glass login |
 
 After `00`, and until `99`:
@@ -114,15 +116,26 @@ export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
 ```
 
 Its policy (`20-policies/breakglass-admin.hcl`) covers **only** `sys/generate-root/*`
-and `sys/rekey/*`. That's enough for `85-rekey.sh`. Anything else needs a root token
-regenerated from three shares, then revoked again:
-[`../documents/runbooks/seal-unseal.md`](../documents/runbooks/seal-unseal.md) →
-*Generate a new root token*. "Anything else" includes re-running `10`–`70`, `90-snapshot.sh`
-and the A9.3 drill.
+and `sys/rekey/*`. That's enough for `85-rekey.sh`.
 
-> **Gap, not yet closed:** a narrow `snapshot` policy (read on
-> `sys/storage/raft/snapshot`) would let `90-` run without a regenerated root. Until
-> it exists, each snapshot costs one generate-root.
+Two narrower identities cover routine work. `96-create-operators.sh` creates them,
+once, with a regenerated root:
+
+| Identity | Can | Used by |
+|---|---|---|
+| `snapshot-operator` | Save a Raft snapshot (not restore) | `90-snapshot.sh`, which logs in as it by itself when no working token is set |
+| `platform-admin` | Write `team-*` policies and roles; write (not read) `secret/teams/*` | `80-onboard-team.sh`, same automatic login |
+
+Everything else still needs a root token regenerated from three shares, then revoked
+again: [`../documents/runbooks/seal-unseal.md`](../documents/runbooks/seal-unseal.md) →
+*Generate a new root token*. That covers re-running `10`–`70` and `96`, restoring a
+snapshot, and the A9.3 drill.
+
+> **`platform-admin` is close to admin-equivalent.** Anyone who can write a policy and a
+> role can grant themselves more, and Vault Community can't restrict what a policy
+> says. `80-onboard-team.sh --verify` is the control: it flags any `team-*` policy that
+> differs from the template, and any `team-*` role carrying another policy or a
+> wildcard. See the header of `20-policies/platform-admin.hcl`.
 
 ## The two things most likely to bite
 

@@ -37,6 +37,7 @@ The third exists because Vault 2.0 made root recovery an authenticated operation
 | Unseal key shares | 5, threshold 3 | **Live — the thing that matters.** The current set dates from the 2026-11-01 rekey; the original shares from `operator init` are dead |
 | Initial root token | 1 | **Revoked 2026-11-01** (`99-`, Phase A6, D10) |
 | Break-glass password (`userpass/breakglass`) | 1 | **Live** — created by `bootstrap/95-create-breakglass.sh` |
+| Operator passwords (`userpass/snapshot-operator`, `userpass/platform-admin`) | 2 | Created by `bootstrap/96-create-operators.sh`, beside `vault-init.json` as `<user>-userpass.txt`, in the same password-manager note. Not recovery credentials, so losing one means a `--rotate` with a regenerated root, not a lockout. But **`platform-admin` is close to admin-equivalent** (header of `20-policies/platform-admin.hcl`): hold it like break-glass |
 
 After A6, `vault-init.json`'s remaining value is **purely the five shares**. The
 root token entry is dead weight; leave it rather than editing the file.
@@ -265,6 +266,9 @@ Record custody events here. **Events only — never contents.**
 | 2026-11-01 | Rekey, 5 shares / threshold 3 (`85-rekey.sh`, `require_verification`), same day as the exposure. The pre-rekey file was deleted | Adhito | 3/3 new shares verified from the saved file before the switch; Vault still unsealed |
 | 2026-11-01 | Password-manager copy replaced with the post-rekey `vault-init.json` | Adhito | Read back 2026-11-11 — see the A2 row |
 | 2026-11-01 | Break-glass password added to the password-manager note | Adhito | Read back 2026-11-11 — see the A2 row |
+| 2026-11-11 | Root regenerated via break-glass + 3 shares, to run `96-create-operators.sh`; revoked straight after | Adhito | Token policy `root` before; `vault token revoke -self` after |
+| 2026-11-11 | Operator logins `snapshot-operator` and `platform-admin` created (`96-`) | Adhito | `96-` 26/26 PASS; `90-snapshot.sh` and `80-onboard-team.sh --verify` then ran without root |
+| ______ | Operator passwords added to the password-manager note | ______ | ______ |
 | 2026-11-11 | **Restore verified from second copy (A2 gate)**: `vault-0` restarted (sealed), unsealed with `unseal_keys_b64` [2], [3], [4] typed from the password-manager copy; break-glass password from the same note logged in | Adhito | `Sealed false`, `HA Mode active`; break-glass `generate-root -status` answered; ESO store `Valid` afterwards |
 | 2026-11-01 | Root token revoked (A6, D10) — `99-revoke-root.sh`, after the rekey | Adhito | Preflight 15/15 incl. live break-glass login; the script confirmed the token no longer works |
 
