@@ -44,7 +44,10 @@ with `VAULT_POC_SNAPSHOTS`; `assert_keys_path_safe` still refuses any in-repo pa
 that git doesn't ignore. **`git clean -xfd` would delete them along with the keys.**
 
 Taken so far: `vault-2026-11-01-184208.snap` (72K, after the full bootstrap,
-before the rekey). It is still restorable with the **current** shares: a rekey
+before the rekey), and `vault-2026-11-01-235020.snap` (68K, the first one taken
+as `snapshot-operator`). That second one was **actually taken on 2026-11-11**: the
+Dev VM's clock was 10 days behind after a saved-state resume. The name comes from
+the Dev VM's clock, so check it if a name looks wrong. It is still restorable with the **current** shares: a rekey
 replaces the shares, not the key they reconstruct.
 
 Retention: the 10 most recent, pruned automatically by `90-snapshot.sh`.
@@ -67,13 +70,12 @@ export VAULT_TOKEN=<a token with sys/storage/raft/snapshot read>
 ./90-snapshot.sh
 ```
 
-> **Which token, now that root is revoked (2026-11-01).** No policy grants
-> `sys/storage/raft/snapshot` yet, and `breakglass-admin` covers only
-> generate-root and rekey. So today a snapshot needs a **regenerated root**
-> ([`seal-unseal.md`](seal-unseal.md) → *Generate a new root token*), revoked
-> afterwards. **Planned fix:** a narrow `snapshot` policy (`read` on
-> `sys/storage/raft/snapshot`) bound to its own identity. That identity is also what
-> the CronJob below would need.
+> **Which token, now that root is revoked (2026-11-01).** The `snapshot-operator`
+> login from `96-create-operators.sh`, with policy `20-policies/snapshot-operator.hcl`:
+> it can *save* a snapshot and nothing else. With no working token set, `90-snapshot.sh`
+> logs in as it by itself and revokes the token on exit, so `./90-snapshot.sh` alone is
+> enough. Restoring is deliberately **not** in that policy, so it still needs root (see
+> the drill below). The same identity is what the CronJob below would use.
 
 By hand:
 

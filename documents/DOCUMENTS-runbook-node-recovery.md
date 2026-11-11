@@ -68,7 +68,15 @@ still unsealed):
    `vagrant resume devnodeworker01 devnodeworker02`.
 5. Verify: `vagrant status`, `kubectl --kubeconfig configs/config get nodes`, and
    `kubectl --kubeconfig configs/config -n vault get pods`. `vault-0` should be `1/1 Running`
-   with no new restarts, which means it was never sealed.
+   with no new restarts. `1/1` alone doesn't prove it: a sealed pod also shows `1/1`.
+   Confirm `Sealed false` with
+   `kubectl --kubeconfig configs/config -n vault exec vault-0 -- vault status`.
+6. **Check the clocks.** A restored VM wakes up at the time it was saved. On 2026-11-11 the
+   cluster nodes caught up by themselves, but the Dev VM stayed 10 days behind: its
+   `vboxadd-service` was inactive, and NTP is UDP, which this host's network mostly drops.
+   Compare `date -u` in each VM with Windows. To fix, run
+   `sudo systemctl start vboxadd-service` in the VM, or set the clock from the host:
+   `sudo date -u -s "<host time>"`.
 
 ## Step 0 — Diagnose first. Don't skip this.
 

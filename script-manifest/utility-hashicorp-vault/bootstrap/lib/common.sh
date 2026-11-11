@@ -100,6 +100,26 @@ require_vault_authenticated() {
      99-revoke-root.sh it must be regenerated with 'vault operator generate-root'."
 }
 
+# After 99 there is no root token. A script that only needs one of the narrow
+# operator identities from 96-create-operators.sh logs in as it, but only when
+# no working token is present: an explicit VAULT_TOKEN (root, say) still wins.
+# The 15-minute token is revoked when the script exits. Sets an EXIT trap, so
+# call it before any trap of your own, or chain them.
+use_operator_login_if_needed() {  # $1 = userpass user, e.g. snapshot-operator
+  local user="$1" f
+  vault token lookup >/dev/null 2>&1 && return 0
+  f="$(vault_poc_keys_dir)/${user}-userpass.txt"
+  [[ -r "$f" ]] || return 0     # nothing to fall back to; require_vault_authenticated explains
+  require_vault_unsealed
+  # A stale VAULT_TOKEN must not ride along on the login request.
+  VAULT_TOKEN="$(env -u VAULT_TOKEN vault write -field=token "auth/userpass/login/${user}" password=@"$f" 2>/dev/null)" \
+    || die "login as ${user} failed. Password file: ${f}
+     If the password was rotated, restore it from the password-manager note."
+  export VAULT_TOKEN
+  trap 'vault token revoke -self >/dev/null 2>&1 || true' EXIT
+  log_ok "logged in as ${user} (15-minute token, revoked on exit)"
+}
+
 # ------------------------------------------------- idempotency (Rule 9) ----
 # Everything in bootstrap/ WILL be re-run. Re-running must produce no errors and
 # no drift, so every enable is guarded by one of these.

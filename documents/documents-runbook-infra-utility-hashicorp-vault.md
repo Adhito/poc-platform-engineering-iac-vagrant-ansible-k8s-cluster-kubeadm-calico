@@ -41,14 +41,15 @@ configure what lives inside Vault. `vagrant provision` touches none of it.
 | A6 | Kubernetes auth, policies, isolation tests, break-glass, root revoked | ✅ Done 2026-11-01 (`70` passed 10/10, `95` 9/9) |
 | A7 | KV, dynamic Postgres credentials, revocation proof | ✅ Done 2026-11-01 |
 | A9.1–A9.2 | Audit to stdout, first snapshot | ✅ Done 2026-11-01 |
-| A9.3 | Restore drill and recovery time (RTO) | ⏳ **Open**, and blocked by the snapshot-token gap below |
+| — | Operator logins: `snapshot-operator`, `platform-admin` (`96`) | ✅ Done 2026-11-11. Snapshots and team onboarding no longer need root |
+| A9.3 | Restore drill and recovery time (RTO) | ⏳ **Open**. Unblocked: a fresh snapshot exists (2026-11-11) |
 | A4 | Scale to 3 replicas | ⏳ Not started |
 | A9.4 | Automated seal alert | ⛔ Parked: no Prometheus Operator CRDs on this cluster |
 
-**Known gap:** with root revoked, **no token can take a snapshot.** The only human
-identity, `breakglass`, may only start `generate-root` and `rekey`. Until a narrow
-snapshot policy exists, a snapshot (script `90`, the A9.3 drill, the pre-upgrade
-step) first needs a root token from `generate-root`, revoked again afterwards.
+**Day-to-day identities.** `breakglass` may only start `generate-root` and `rekey`.
+For routine work, `96-create-operators.sh` adds `snapshot-operator` (save snapshots,
+used by `90`) and `platform-admin` (onboard teams, used by `80`). Anything else still
+needs a root token from `generate-root`, revoked again afterwards.
 
 The custody event log (who did what, when; never key material) is the register at
 the bottom of [`key-custody.md`](../script-manifest/utility-hashicorp-vault/documents/key-custody.md).
@@ -132,9 +133,11 @@ that Kubernetes objects can't express.
 | `30`–`50` | KV v2, the dynamic PostgreSQL credentials engine, seeded secrets and the Level 4 PGP key |
 | `60` | Audit device (stdout) |
 | `70-verify-access.sh` | The isolation tests: proves each app can read only its own level |
+| `80-onboard-team.sh` | Onboards another team (policy, Kubernetes auth role and KV path, all `team-<name>`) without root. `--verify` checks nobody has widened a team's access |
 | `85-rekey.sh` | Replaces the unseal shares **without printing them**. The old shares stay valid until the new ones are verified |
 | `90-snapshot.sh` | Raft snapshot, saved beside the keys |
 | `95-create-breakglass.sh` | Creates the `breakglass` recovery login that Vault 2.x needs, and proves it works |
+| `96-create-operators.sh` | Creates the `snapshot-operator` and `platform-admin` logins and proves exactly what each can and can't do. Needs a regenerated root, once |
 | `99-revoke-root.sh` | Checks the whole bootstrap, then revokes the root token. Already run |
 
 **Full run order, prerequisites, guards and the KV path trap:**
@@ -220,6 +223,9 @@ Each one cost time on this cluster. Details are in the linked documents.
   same day, and record the event in `key-custody.md`.
 - **Snapshots and `vault-init.json` are a matched pair.** Back up and restore them
   together.
+- **Teams get `team-*` access only through `80-onboard-team.sh`**, never a hand-written
+  policy. Run `80-onboard-team.sh --verify` after any change. Team secrets are DEV values
+  the team can recreate: no production credentials.
 - **Never `VAULT_SKIP_VERIFY`.** A TLS error means a missing SAN or the wrong CA;
   fix that instead.
 
@@ -229,7 +235,7 @@ Each one cost time on this cluster. Details are in the linked documents.
 
 | Item | Where |
 |---|---|
-| Snapshot policy, so snapshots no longer need a regenerated root | [`snapshot-restore.md`](../script-manifest/utility-hashicorp-vault/documents/runbooks/snapshot-restore.md) |
+| Settle the BUSL licence question before opening Vault to other teams | [`licensing.md`](../script-manifest/utility-hashicorp-vault/documents/licensing.md) |
 | A9.3 restore drill, recording the RTO | [`snapshot-restore.md`](../script-manifest/utility-hashicorp-vault/documents/runbooks/snapshot-restore.md) |
 | A4: 3 replicas, failover time, which worker hosts two peers | [`environment.md`](../script-manifest/utility-hashicorp-vault/documents/environment.md) → Measurements |
 | A human (developer) login method | [`DOCUMENTS-backlog.md`](DOCUMENTS-backlog.md) #4 |
