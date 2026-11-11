@@ -16,7 +16,7 @@ it by that repo and path, not as a local `documents/environment.md`.
 
 ---
 
-## Status: IN PROGRESS — verified by `preflight.sh` on 2026-09-11
+## Status: Stage A deployed and bootstrapped. Re-verified live on 2026-11-01
 
 | | Meaning |
 |---|---|
@@ -24,32 +24,30 @@ it by that repo and path, not as a local `documents/environment.md`.
 | ⚠️ | Inferred from repo config or a sibling project; confirm before relying on it |
 | ❌ | **Missing or not known.** Blocks the phase named |
 
-Nothing below marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refresh.
-
-> **Stale after the 1.36 rebuild.** Apart from the Kubernetes and ArgoCD rows, this table is
-> the 2026-09-11 preflight of the old Kubernetes 1.29 cluster. The cluster was rebuilt on
-> 1.36.4 on 2026-09-22 (see *Kubernetes version* below); re-run preflight and replace it. Node
-> names and IPs carried over. Everything that was installed on the cluster did not — the
-> MetalLB pool returns when this repo's `addon_metallb` is applied (it now owns MetalLB).
+Nothing marked ❌ may be guessed. Re-run `bootstrap/preflight.sh` to refresh. The
+rows below were last read from the cluster with `kubectl` on 2026-11-01. The
+sections further down keep the original A0 reasoning, with their answers filled in.
 
 | Value | Status | Blocks |
 |---|---|---|
-| Node names and IPs | ✅ | — |
+| Node names and IPs | ✅ unchanged: `.10` / `.11` / `.12` | — |
 | Kubernetes version | ✅ `v1.36.4` on all nodes (rebuilt 2026-09-22; was `v1.29.15`) | — |
-| MetalLB pool and existing allocations | ✅ | — |
-| MetalLB VIP for Vault | ✅ `192.168.56.241` — free | — |
-| NodePort `30004` | ✅ free | — |
-| ArgoCD version | ✅ `v3.5.3` (was `v2.14.8`) — multi-source supported (≥ 2.6) | — |
-| **ArgoCD credential for this repo** | ❌ **absent** — only the OTel Helm repo is registered | **A1** — every child fails to fetch |
+| MetalLB pool and allocations | ✅ `local-pool` `.240`–`.250`; `.240` ingress-nginx, `.241` `vault-lb`. L2 advertised on **`eth1` only** (see *MetalLB* below) | — |
+| MetalLB VIP for Vault | ✅ `192.168.56.241`, held by `vault/vault-lb` | — |
+| NodePort `30004` | ✅ `vault/vault-nodeport` | — |
+| ArgoCD version | ✅ `v3.5.3`, multi-source works (`utility-hashicorp-vault-server` Synced/Healthy) | — |
+| ArgoCD credential for this repo | ✅ **Not needed**: the repo is public and every Application uses its HTTPS URL | — |
 | Cluster OIDC issuer | ✅ `https://kubernetes.default.svc.cluster.local` | — |
-| **StorageClass** | ❌ **none exists at all** — `local-path-provisioner` never installed | **A2** — Vault and Postgres PVCs |
-| **cert-manager** | ❌ **not installed** | **A2** — wave 0 cannot issue Vault's cert |
-| Prometheus operator-managed? (5a) | ✅ **no** — ServiceMonitor/PrometheusRule CRDs absent | **A9.4 cannot be done additively** — reported, not worked around |
+| StorageClass | ✅ `local-path` (`rancher.io/local-path`, `WaitForFirstConsumer`, **not** default), provisioner `v0.0.37` | — |
+| cert-manager | ✅ `v1.21.2` | — |
+| External Secrets Operator | ✅ `v2.11.0` | — |
+| Prometheus operator-managed? (5a) | ✅ **no**: no `monitoring.coreos.com` CRDs | **A9.4 cannot be done additively**, so it was reported, not worked around |
 | Prometheus discovery labels (5b) | n/a | moot while 5a is "no" |
 | Alertmanager receiver (5c) | n/a | moot while 5a is "no" |
-| Dev workspace VM address | ⚠️ | A2 (client access) |
-| Private registry address | ✅ `192.168.56.20:5000`, insecure — read from worker01's CRI-O drop-in `dev-vm-registry.conf` | — |
-| **Registry trust on worker02** | ❌ **drop-in absent** — fixup script never run after the 2026-08-29 rebuild | Stage B / tracing-poc images scheduled on worker02 |
+| Dev workspace VM address | ✅ `192.168.56.20`, where every bootstrap script has run | — |
+| Private registry address | ✅ `192.168.56.20:5000`, insecure. Read from worker01's CRI-O drop-in `dev-vm-registry.conf` | — |
+| Registry trust on worker02 | ⚠️ **Not re-checked since 2026-09-11**, when the drop-in was absent. Check before Stage B schedules images there | Stage B / tracing-poc images on worker02 |
+| Cluster DNS upstream | ⚠️ **Live hotfix, not in code**: CoreDNS forwards over **TCP** to `8.8.8.8 1.1.1.1` (see *Host network* below) | Lost on a cluster rebuild |
 
 ---
 
@@ -159,12 +157,20 @@ Known allocations:
 | IP | Service |
 |---|---|
 | `192.168.56.240` | `ingress-nginx-controller` |
+| `192.168.56.241` | `vault/vault-lb` |
 
-**Vault's VIP: `192.168.56.241`** ⚠️ — *proposed, unconfirmed.*
+**Vault's VIP: `192.168.56.241`** ✅, in use since 2026-10-05.
 
 ```bash
-kubectl get svc -A -o wide | grep 192.168.56.24     # confirm .241 is free
+kubectl get svc -A -o wide | grep 192.168.56.24     # current allocations
 ```
+
+**L2 advertisement is pinned to `eth1`** (the host-only network), by
+`L2Advertisement local-l2` `interfaces: [eth1]`, set by `addon_metallb` since PR #22. On
+2026-10-31 MetalLB also answered ARP on `eth0`, the VirtualBox NAT interface. That
+exhausted the NAT engine (`Can't allocate mbuf` in `VBox.log`) and cut the master's
+outbound traffic and `vagrant ssh`. Toggling the NIC (`setlinkstate1`) did not recover
+it. A clean guest shutdown over host-only SSH followed by `vagrant up` did.
 
 Requesting an address *from* the pool is additive; it allocates, it does not
 edit the pool. It must be **pinned**, not auto-assigned, because it appears in
@@ -200,24 +206,43 @@ name first, not after the browser complains.
 
 Confirm reachability before A2: `ping 192.168.56.10` from the dev VM.
 
+The repo is mounted in the Dev VM at
+`~/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico`.
+It's a VirtualBox shared folder, a live view of the Windows working tree, so **the
+branch checked out on Windows is what the Dev VM runs.**
+
+### Host network: UDP DNS is dropped
+
+On the host's current network, DNS over **UDP** is dropped for every resolver
+except the ISP's own; DNS over TCP works. Inside the cluster, that showed up as
+CoreDNS upstream timeouts. ESO, ArgoCD (Helm repo fetches) and anything else
+resolving external names failed or crawled.
+
+**Hotfix, applied live on 2026-11-01 and not in code:** the `coredns` ConfigMap
+forwards to `8.8.8.8 1.1.1.1` with `force_tcp`. kubeadm owns that ConfigMap, so
+a cluster rebuild (or `kubeadm upgrade`) reverts it. Node-level DNS (the nodes' own
+`apt`, image pulls) is still UDP. Both follow-ups are in the cluster repo's
+[`documents/DOCUMENTS-backlog.md`](../../../documents/DOCUMENTS-backlog.md) #5.
+
+### Host side (Windows)
+
+The default `~/.kube/config` on the Windows host points at an **unrelated AWS EKS
+cluster**. From Windows, always pass `--kubeconfig configs/config` (repo root), or
+run `kubectl` in the Dev VM.
+
 ---
 
-## Storage ❌ — blocks A2
+## Storage ✅
 
-P8 expects Rancher **`local-path-provisioner`** with
-`volumeBindingMode: WaitForFirstConsumer`. **Not verified, and probably absent** —
-no `local-path-storage` namespace appeared in a full `kubectl get pods -A` during
-this session.
+`local-path-provisioner` **v0.0.37**, installed 2026-09-23 from
+`base/local-path-provisioner`. StorageClass `local-path`, `WaitForFirstConsumer`,
+deliberately **not** the cluster default. Vault's `dataStorage.storageClass` and
+Postgres's `volumeClaimTemplates` both name it.
 
 ```bash
 kubectl get sc
 kubectl get pods -n local-path-storage
 ```
-
-If it is missing, install it before A2 — Vault's `dataStorage.storageClass` and
-Postgres's `volumeClaimTemplates` both name `local-path`. Record the real name
-here and correct `helm/vault/values-onprem.yaml` and
-`overlays/onprem/postgres/kustomization.yaml` if it differs.
 
 ### Understand what you are accepting
 
@@ -248,30 +273,25 @@ Present and managing this cluster. Verified with `kubectl get applications -n ar
 |---|---|
 | `local-root` | app-of-apps root (observability team) |
 | `observability-local` | observability team |
-| `utility-hashicorp-vault` | **Stage A** (this repo) root app, from `argocd/root-platform.yaml` — applied at A1 |
+| `utility-hashicorp-vault` | **Stage A** (this repo) root app, from `argocd/root-platform.yaml`, applied at A1. Five children `utility-hashicorp-vault-*`, all Synced/Healthy on 2026-11-01 |
 
-### Repo credential ❌ — blocks A1
+### Repo credential ✅: not needed
 
-This repo's git remote is an SSH host alias ArgoCD cannot resolve:
+This repo's git remote is an SSH host alias ArgoCD cannot resolve
+(`git@github.com-adhito909:...`), so the Applications use the HTTPS URL. **The repo
+is public** (verified 2026-09-22), so ArgoCD reads it anonymously. If it is ever made
+private, register a credential or deploy key. The vault repo's
+`root-applications.yaml` has the same concern.
 
-```
-git@github.com-adhito909:Adhito/poc-platform-engineering-iac-...git
-```
-
-The Applications use the HTTPS URL. ArgoCD needs a credential for it (the repo is
-not public), or a plain SSH URL plus a deploy key. **The vault repo has the same
-problem** — one fix, applied twice.
-
-### Multi-source support ❌ — confirm before A1
+### Multi-source support ✅
 
 `argocd/applications/vault.yaml` is a multi-source Application (chart from
-HashiCorp's Helm repo, values from git). Confirm this ArgoCD version supports it,
-and that `https://helm.releases.hashicorp.com` is permitted. Fallback is Kustomize
-`helmCharts:` inflation — but confirm first rather than assuming.
+HashiCorp's Helm repo, values from git). ArgoCD v3.5.3 supports it, and the
+app has synced from `https://helm.releases.hashicorp.com` since 2026-10-05.
 
 ---
 
-## Observability ❌ — may cancel A9.4
+## Observability ✅ answered: A9.4 parked
 
 The stack is **Grafana LGTM** in `observability`, ArgoCD-managed as
 `observability-local`, owned by another team. Its metrics store is Mimir, which
@@ -289,7 +309,9 @@ works — which Rule 8 forbids. Remove `vault-monitoring.yaml` from
 `argocd/applications/` in that case; the other children are unaffected and Stage A
 still completes without it.
 
-Answer: _______________
+Answer: **No** (2026-09-11; re-checked 2026-11-01, zero `monitoring.coreos.com` CRDs).
+`vault-monitoring` is parked in `argocd/disabled/`, so there is **no automated seal
+alert**.
 
 ### 5b — What selector does Prometheus use?
 
@@ -328,7 +350,7 @@ Answer: _______________
 
 ---
 
-## OIDC issuer ❌ — blocks A6
+## OIDC issuer ✅
 
 ```bash
 kubectl get --raw /.well-known/openid-configuration | jq -r .issuer
@@ -339,11 +361,13 @@ Record the result here anyway — it is a documented environment fact, and if th
 lookup ever returns something unexpected the PRD says stop and ask rather than
 substitute a plausible value.
 
-Issuer: _______________
+Issuer: **`https://kubernetes.default.svc.cluster.local`** (re-read 2026-11-01).
+From Windows Git Bash, prefix the command with `MSYS_NO_PATHCONV=1`, or Git Bash
+rewrites `/.well-known/...` into a Windows path and the API server answers `NotFound`.
 
 ---
 
-## Private registry ❌ — blocks Stage B builds
+## Private registry ⚠️ — address known, worker02 trust unchecked
 
 P7 expects `registry:2` under Podman on the dev workspace, trusted by CRI-O on all
 nodes. Stage B's `Makefile`s read `REGISTRY` from this file.
@@ -353,7 +377,9 @@ podman ps --filter name=registry          # on the dev VM
 crictl pull <registry>/hello              # on a node — proves trust, not just reachability
 ```
 
-Address: _______________
+Address: **`192.168.56.20:5000`**, insecure (from worker01's CRI-O drop-in
+`dev-vm-registry.conf`). Run the `crictl pull` check on **worker02** before Stage B:
+that node's drop-in was missing on 2026-09-11.
 
 > Related: a rebuilt node loses CRI-O's registry-trust drop-in. See
 > [`../../../documents/DOCUMENTS-runbook-node-recovery.md`](../../../documents/DOCUMENTS-runbook-node-recovery.md)
@@ -401,6 +427,7 @@ Deliverables, not observations — they belong here, not in a terminal you will 
 
 | Measurement | Phase | Value |
 |---|---|---|
+| Vault pod placement (replicas = 1) | A2 | `vault-0` on `devnodeworker02` (2026-11-01) |
 | Leader failover window | A4 | _______ |
 | **Which worker hosts two Raft peers** | A4 | _______ |
 | Snapshot restore RTO | A9.3 | _______ |
@@ -419,6 +446,7 @@ Deliverables, not observations — they belong here, not in a terminal you will 
 | [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) | Sealing, unsealing, rekey, generate-root |
 | [`runbooks/snapshot-restore.md`](runbooks/snapshot-restore.md) | Backup and the A9.3 restore drill |
 | [`runbooks/upgrade.md`](runbooks/upgrade.md) | Version bumps; downgrades are not supported |
-| [`key-custody.md`](key-custody.md) | Unseal-key custody — method and holder. Its A2 checklist is unticked |
+| [`key-custody.md`](key-custody.md) | Unseal-key custody: method, holder, event register. One A2 item still open |
+| [`../../../documents/documents-runbook-infra-utility-hashicorp-vault.md`](../../../documents/documents-runbook-infra-utility-hashicorp-vault.md) | **Index** of everything in this folder |
 | [`../bootstrap/README.md`](../bootstrap/README.md) | Configuring Vault's contents |
 | [`../README.md`](../README.md) | The manifests and ArgoCD wiring |

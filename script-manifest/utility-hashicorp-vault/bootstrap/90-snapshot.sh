@@ -11,8 +11,9 @@
 # unopenable blob. vault-init.json and the snapshots are a MATCHED PAIR —
 # losing either loses both.
 #
-# That is why snapshots are written next to the keys, outside the repo, and not
-# into the working tree where `git clean -xfd` would take them.
+# That is why snapshots are written next to the keys: outside the repo, or in its
+# gitignored keys folder (this cluster, since 2026-10-05). Never anywhere git
+# tracks, and never anywhere `git clean -xfd` is run.
 #
 # Also worth knowing before the restore drill (A9.3):
 #   - `snapshot restore -force` OVERWRITES the target's entire dataset. It is

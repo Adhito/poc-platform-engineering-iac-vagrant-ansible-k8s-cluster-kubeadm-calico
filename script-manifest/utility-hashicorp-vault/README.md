@@ -7,6 +7,15 @@ repo's Stage B applications (Levels 1–4) have something to consume.
 The authoritative specification is **`documents/PRD_HashiCorp_Vault_Kubernetes_Cluster_Onprem.md`
 in the vault repo**, not this README. Where the two disagree, the PRD wins.
 
+> **Start at the index:**
+> [`documents/documents-runbook-infra-utility-hashicorp-vault.md`](../../documents/documents-runbook-infra-utility-hashicorp-vault.md)
+> in the repo root. It has the current status, where to run what, a one-line map
+> of every document here, and the lessons learned.
+>
+> **Status (2026-11-01):** deployed and bootstrapped. All ArgoCD apps are Synced/Healthy,
+> scripts `00`–`99` have run, and **the root token is revoked**. Still open: the A2
+> password-manager unseal check, the A9.3 restore drill, and A4 (3 replicas).
+
 ---
 
 ## Deliberate deviation: manifests live here, not in the vault repo
@@ -94,13 +103,14 @@ patched in at the overlay, not baked into the base.
 
 These are **not** optional polish. Several will silently half-work if skipped.
 Status as of the 2026-09-23 preflight run, on the rebuilt 1.36 cluster (from the Dev VM):
-**passed 19, failed 3** — MetalLB (below), and git state until this branch is pushed and merged.
+**passed 19, failed 3**: MetalLB (below), and git state until this branch is pushed and merged.
+**All ten items have been resolved since then.** Vault was deployed and initialised on 2026-10-05.
 
 | # | Item | Where it lands | Status |
 |---|---|---|---|
 | 1 | **Kubernetes ≥ 1.32** (P2) — **v1.36.4** on all nodes (was v1.29.15) | cluster | ✅ **Rebuilt 2026-09-22** — see below |
 | 2 | `local-path-provisioner` (P8) | cluster | ✅ **v0.0.37 installed 2026-09-23** — StorageClass `local-path`, *not* default |
-| 3 | MetalLB VIP for Vault | `overlays/onprem` | ⏳ `192.168.56.241` free, but **MetalLB itself is not installed** on the rebuilt cluster — it returns when this repo's `addon_metallb` runs (`vagrant provision devnodeworker02`); this repo owns MetalLB since 2026-09-23. **Blocks `root-platform`:** wave 0's `vault-lb` never gets an address, so ArgoCD never starts wave 1 |
+| 3 | MetalLB VIP for Vault | `overlays/onprem` | ✅ `192.168.56.241`, held by `vault-lb`. MetalLB 0.16.1 comes from this repo's `addon_metallb`. Since PR #22 (2026-11-01) it advertises on `eth1` only: ARP on the NAT interface `eth0` exhausted VirtualBox's NAT |
 | 4 | Prometheus discovery labels (A0.5 check 5b) | — | n/a — moot while 5 is "no" |
 | 5 | Prometheus operator-managed (A0.5 check 5a) | — | ✅ **No** — `vault-monitoring` parked in `argocd/disabled/` |
 | 6 | Cluster OIDC issuer | bootstrap | ✅ `https://kubernetes.default.svc.cluster.local` |
@@ -257,17 +267,24 @@ Run order, after the root app (`utility-hashicorp-vault`) has synced and Vault i
 | 50 | `50-seed-secrets.sh` | A7 — KV values + Level 4 PGP keypair |
 | 60 | `60-enable-audit.sh` | A9.1 — **before Stage B**; audit is not retroactive |
 | 70 | `70-verify-access.sh` | A6 — the negative tests; non-zero exit on failure |
+| 85 | `85-rekey.sh` | As needed: replace the unseal shares without printing them (run 2026-11-01 after a share exposure) |
 | 90 | `90-snapshot.sh` | A9.2 |
 | 95 | `95-create-breakglass.sh` | A6 — **the recovery identity Vault 2.0 requires**; proves it before root can go |
 | 99 | `99-revoke-root.sh` | A6 — last; preflights the whole bootstrap, including 95 |
 
+All of them ran on 2026-11-01. `00` ran on 2026-10-05. Root is now revoked: see
+[`bootstrap/README.md`](bootstrap/README.md) → *After 99* for which token to use now.
+
 ## What is deliberately *not* here
 
-- **The A7 revocation proof** — `psql` in with a generated credential,
+- **The A7 revocation proof:** `psql` in with a generated credential,
   `vault lease revoke`, confirm the connection now fails and `\du` shows the role
   dropped. `40-` proves issuance; a revocation you have not watched fail is not proven.
-- **The A9.3 restore drill** — destroy Vault including PVCs, redeploy, restore, unseal
-  with the *original* shares. Its real output is a wall-clock number: the actual RTO.
+  *Done by hand on 2026-11-01.* It caught a real bug, which `40-` now guards against:
+  [`bootstrap/README.md`](bootstrap/README.md) → *Not in these scripts*.
+- **The A9.3 restore drill:** destroy Vault including PVCs, redeploy, restore, unseal
+  with the *current* shares (the ones in `vault-init.json` at the time of the restore).
+  Its real output is a wall-clock number: the actual RTO. *Not yet run.*
 - **`documents/environment.md`, `key-custody.md`, the three runbooks** — written, not
   generated.
 

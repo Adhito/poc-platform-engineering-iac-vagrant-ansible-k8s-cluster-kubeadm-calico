@@ -34,8 +34,8 @@ The third exists because Vault 2.0 made root recovery an authenticated operation
 
 | Item | Count | Status |
 |---|---|---|
-| Unseal key shares | 5, threshold 3 | **Live — the thing that matters** |
-| Initial root token | 1 | Revoked at the end of Phase A6 (D10) |
+| Unseal key shares | 5, threshold 3 | **Live — the thing that matters.** The current set dates from the 2026-11-01 rekey; the original shares from `operator init` are dead |
+| Initial root token | 1 | **Revoked 2026-11-01** (`99-`, Phase A6, D10) |
 | Break-glass password (`userpass/breakglass`) | 1 | **Live** — created by `bootstrap/95-create-breakglass.sh` |
 
 After A6, `vault-init.json`'s remaining value is **purely the five shares**. The
@@ -213,10 +213,12 @@ alternative above becomes the requirement.
 
 ### Before Phase A2 can close
 
-- [ ] Password-manager copy created
+- [x] Password-manager copy created (replaced with the post-rekey file on 2026-11-01,
+      break-glass password added to the same note)
 - [ ] **Restore verified**: seal a node and unseal it using a share retrieved
-      from the password-manager copy — *not* the working file
-- [ ] This document completed (holders table filled)
+      from the password-manager copy — *not* the working file. Procedure:
+      [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) → *Key custody*
+- [x] This document completed (holders table filled)
 
 > **A backup you have never read from is a hypothesis.** The verification step
 > is the one that turns "I have a copy" into "I have a copy that works", and it
@@ -238,7 +240,7 @@ alternative above becomes the requirement.
 
 | Event | Action |
 |---|---|
-| **Share exposed** (pasted in chat, committed, screenshotted) | `vault operator rekey` immediately. The master key is unchanged, so snapshots remain restorable with the new shares |
+| **Share exposed** (pasted in chat, committed, screenshotted) | Rekey the same day with `bootstrap/85-rekey.sh`, which never prints the new shares (plain `vault operator rekey` does). Then replace the password-manager copy, delete the `pre-rekey` file, and add a row below. The master key is unchanged, so snapshots remain restorable with the new shares. *Happened 2026-11-01: see the register* |
 | **Holder leaves / laptop lost** | Rekey. Assume the old shares are compromised |
 | **Password-manager copy is stale after a rekey** | Replace it the same day. A stale second copy is worse than none — it will be trusted at the exact moment it fails |
 | **Primary copy lost, second copy intact** | Restore from the second copy, then create a fresh primary. Consider rekeying if the loss was not clean |

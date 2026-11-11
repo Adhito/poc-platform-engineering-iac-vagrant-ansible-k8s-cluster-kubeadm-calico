@@ -29,9 +29,14 @@ It prints a paste-ready block for `environment.md` at the end.
 > Setting up the CLI for the first time? The step-by-step version, with checks and
 > troubleshooting, is [`../documents/developer-setup.md`](../documents/developer-setup.md).
 
-On the Dev VM (`192.168.56.20`), with `vault`, `kubectl`, `jq`, `gpg`, `openssl`:
+On the Dev VM (`192.168.56.20`), with `vault`, `kubectl`, `jq`, `gpg`, `openssl`.
+**Not from Windows Git Bash.** Its `curl` can't read the `<(...)` process substitution
+that `85-` uses to keep the token out of the process list, and its default kubeconfig
+is not this cluster. Run the scripts from the repo root with their full path, for example
+`./script-manifest/utility-hashicorp-vault/bootstrap/70-verify-access.sh`:
 
 ```bash
+cd ~/workspace-app/poc-platform-engineering-iac-vagrant-ansible-k8s-cluster-kubeadm-calico
 export VAULT_ADDR=https://192.168.56.241:8200      # MetalLB VIP (D8 primary)
 export VAULT_CACERT=/etc/vault-poc/ca.crt          # CA that signed Vault's cert
 # Keys in this repo's gitignored .credentials/ folder (on the Windows host, via the
@@ -78,7 +83,7 @@ Use the same NodePort address whenever MetalLB itself is broken.
 | — | `preflight.sh` | A0 | **Run first.** Read-only; checks the cluster, not Vault. Exits non-zero on a hard blocker |
 | 00 | `00-init-unseal.sh` | A2 | **Produces the unseal keys.** `--all-peers` for A4 |
 | 10 | `10-enable-kubernetes-auth.sh` | A6 | Needs sync wave 0 to have applied |
-| 20 | `20-apply-policies.sh` | A6 | Applies `20-policies/*.hcl`, binds roles |
+| 20 | `20-apply-policies.sh` | A6 | Applies `20-policies/*.hcl`, binds roles. The ESO `ClusterSecretStore` stays Degraded until this runs, and then took ~7 min to turn Healthy (2026-11-01). Wait for it before assuming a fault |
 | 30 | `30-enable-kv.sh` | A7 | KV v2 at `secret/` |
 | 40 | `40-enable-database.sh` | A7 | **Rotates the Postgres admin password — one-way** |
 | 50 | `50-seed-secrets.sh` | A7 | KV values + PGP keypair for Level 4 |
@@ -89,11 +94,35 @@ Use the same NodePort address whenever MetalLB itself is broken.
 | 95 | `95-create-breakglass.sh` | A6 | **Vault 2.0 requires it.** `generate-root` is authenticated on 2.x, so once root is revoked this identity is the only way back. Creates it, then proves it |
 | 99 | `99-revoke-root.sh` | A6 | **Last.** Preflights the whole bootstrap first — including a live break-glass login |
 
-After `00`:
+After `00`, and until `99`:
 
 ```bash
 export VAULT_TOKEN="$(jq -r .root_token $VAULT_POC_KEYS/vault-init.json)"
 ```
+
+All of these environment variables, the token included, are lost when you log out of the Dev VM.
+Re-run the block after every login.
+
+## After 99 — which token now
+
+**`99` ran on 2026-11-01: the root token is revoked**, and the `root_token` field in
+`vault-init.json` is dead. Leave it there. The only human identity is `breakglass`:
+
+```bash
+export VAULT_TOKEN="$(vault write -field=token auth/userpass/login/breakglass \
+    password=@"$VAULT_POC_KEYS/breakglass-userpass.txt")"
+```
+
+Its policy (`20-policies/breakglass-admin.hcl`) covers **only** `sys/generate-root/*`
+and `sys/rekey/*`. That's enough for `85-rekey.sh`. Anything else needs a root token
+regenerated from three shares, then revoked again:
+[`../documents/runbooks/seal-unseal.md`](../documents/runbooks/seal-unseal.md) →
+*Generate a new root token*. "Anything else" includes re-running `10`–`70`, `90-snapshot.sh`
+and the A9.3 drill.
+
+> **Gap, not yet closed:** a narrow `snapshot` policy (read on
+> `sys/storage/raft/snapshot`) would let `90-` run without a regenerated root. Until
+> it exists, each snapshot costs one generate-root.
 
 ## The two things most likely to bite
 
@@ -139,6 +168,22 @@ are a matched pair, and losing either loses both.**
 - **The A7 revocation proof** — `psql` in, `vault lease revoke`, `psql` fails,
   `\du` shows the role gone. `40-` proves issuance and revokes its own test
   lease, but a revocation you haven't watched fail isn't proven.
+  **Done 2026-11-01. It found a real bug.** What it taught:
+  - **The role survived revocation.** `DROP ROLE` fails while the role still holds
+    grants, and Vault reports nothing to the client: it retries in the background and
+    eventually marks the lease *irrevocable*. `40-`'s `revocation_statements` now run
+    `REVOKE ALL ... ; DROP ROLE ...`, and `40-` checks `pg_roles` after revoking its
+    own test lease. Clear an already-stuck lease with
+    `vault lease revoke -force -prefix <lease-id>`.
+  - **Test the password over the pod IP, not `127.0.0.1`.** `pg_hba` trusts local
+    connections, so any password "works" there. Connect with
+    `psql -h "$(hostname -i)"` inside the pod, and include a wrong-password control
+    so you can tell that the server actually checks passwords.
+- **Why `70-` checks the denial's wording.** A negative test that passes on *any*
+  error proves nothing. Vault 2.0.4 answers a wrong ServiceAccount with
+  403 `service account name not authorized`. A wrong role name gets
+  400 `invalid role name`, which also "denies", but for a reason that says nothing about
+  isolation. `70-` accepts only the first, and reports anything else as inconclusive.
 - **The A9.3 restore drill** — destroy Vault including PVCs, redeploy, restore,
   unseal with the *original* shares. Its real output is a wall-clock number:
   your actual RTO.

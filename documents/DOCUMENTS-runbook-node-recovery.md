@@ -19,6 +19,57 @@ corrupted a VM's `.vmdk` header (`VERR_VD_VMDK_INVALID_HEADER`) more than once.
 
 (Pattern: `network.control_ip` in `settings.yaml`, then `+1` per worker index — see `Vagrantfile`.)
 
+## Not a broken node: `vagrant resume` fails with `aborted-saved`
+
+Check this first. It looks like a dead node but isn't one, and the
+destroy/rebuild steps below would throw away a healthy VM.
+
+**Symptom.** `vagrant resume` (or `vagrant up`) on a suspended VM prints:
+
+```
+The guest machine entered an invalid state while waiting for it to boot.
+Valid states are 'restoring, running'. The machine is in the 'aborted-saved' state.
+```
+
+**Cause.** The Windows hypervisor was **on** when the resume ran. It was off when the VM was
+saved. Usually Memory Integrity has been switched back on, by Windows or by accident; see
+*Host requirement (Windows)* in `CLAUDE.md`. VirtualBox then has to run through Hyper-V
+("snail mode"), and a saved state made without it can't be loaded. The VM's
+`Logs/VBox.log` shows both:
+
+```
+NEM: NEMR3Init: Snail execution mode is active!
+SSM: LoadExec failed for 'cpum' ...: VERR_CPUM_INCOMPATIBLE_XSAVE_COMP_MASK
+```
+
+**The saved state is not lost.** The `.sav` file stays in the VM's `Snapshots/` folder.
+**Do not** click "Discard saved state", `vagrant halt` or `vagrant destroy`. Each throws away
+the VM's memory and cold-boots it, which reseals Vault and needs the unseal shares. It also
+affects every VM suspended on the host, including the Dev VM.
+
+**Fix** (seen 2026-11-10/11 on `devnodemaster01` and the Dev VM; both came back with Vault
+still unsealed):
+
+1. Switch the hypervisor off: Windows Security → Device security → Core isolation →
+   **Memory integrity: Off**. In an admin PowerShell, check
+   `bcdedit /enum "{current}" | findstr hypervisorlaunchtype`; if it says `Auto`, run
+   `bcdedit /set hypervisorlaunchtype off`. **Reboot.**
+2. Confirm it's gone. This must print `False`:
+   `(Get-CimInstance Win32_ComputerSystem).HypervisorPresent`
+3. Start each `aborted-saved` VM **with VirtualBox directly**. Vagrant doesn't recognise
+   that state, so a second `vagrant resume` just fails the same way without trying:
+   ```bash
+   # Windows Git Bash: find the affected VMs
+   "/c/Program Files/Oracle/VirtualBox/VBoxManage.exe" list vms --long | grep -E "^(Name|State):" | paste - - | grep aborted-saved
+   # start each one; it restores from its saved state
+   "/c/Program Files/Oracle/VirtualBox/VBoxManage.exe" startvm DEVNODEMASTER01-ANSIBLE --type headless
+   ```
+4. Resume the VMs that are still plain `saved` the normal way, e.g.
+   `vagrant resume devnodeworker01 devnodeworker02`.
+5. Verify: `vagrant status`, `kubectl --kubeconfig configs/config get nodes`, and
+   `kubectl --kubeconfig configs/config -n vault get pods`. `vault-0` should be `1/1 Running`
+   with no new restarts, which means it was never sealed.
+
 ## Step 0 — Diagnose first. Don't skip this.
 
 ```bash

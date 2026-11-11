@@ -77,6 +77,12 @@ the part where the security value actually lives.
 └────────────────────────────────────────────────────────────────┘
 ```
 
+**Running today: one replica, `vault-0` on `devnodeworker02`.** The diagram shows
+the Phase A4 target. D3 phases the replica count (1 in A2, 3 in A4), and A4 hasn't
+run yet, so the quorum discussion below describes the target, not the current state.
+The ServiceMonitor/PrometheusRule box is likewise the design: `vault-monitoring` is
+parked (see *Delivery* below).
+
 Audit goes to `stdout`, read with `kubectl logs`. Not shipped to Loki — that
 would mean editing the observability team's log pipeline.
 
@@ -304,6 +310,9 @@ All logged in the vault repo's `documents/troubleshooting.md`.
 | Cluster healthy, quorum fine, nothing alerting | A sealed follower. Sealed pods pass readiness |
 | Vault stops serving entirely | Audit device cannot write. Vault refuses to serve what it cannot audit — the reason audit goes to stdout, not a PVC |
 | Dynamic credentials all fail to authenticate | Postgres PVC was lost and re-initialised with the pre-rotation password |
+| Lease revoked, yet the Postgres role still exists | `DROP ROLE` blocked by the role's grants. Vault retries quietly, then marks the lease irrevocable. `revocation_statements` must `REVOKE ALL` first (fixed in `40-`, 2026-11-01) |
+| ESO, ArgoCD or CoreDNS time out on name resolution | The host network drops UDP DNS. CoreDNS runs with `force_tcp` as a live hotfix (cluster repo backlog #5), which a cluster rebuild loses |
+| `vault status` times out on `.241`, the pod is Running `0/1` | Vault is sealed: no active pod, so the VIP has no endpoint. Unseal through the NodePort |
 | Upgrade rolls, cluster goes down | Every restarted pod comes back **sealed**; the chart uses `OnDelete` precisely to stop this happening automatically |
 
 ---
@@ -326,7 +335,8 @@ All logged in the vault repo's `documents/troubleshooting.md`.
 
 | Document | Covers |
 |---|---|
-| [`environment.md`](environment.md) | Live cluster values; six still unverified |
+| [`../../../documents/documents-runbook-infra-utility-hashicorp-vault.md`](../../../documents/documents-runbook-infra-utility-hashicorp-vault.md) | **Index**: status, where to run what, every document in one place |
+| [`environment.md`](environment.md) | Live cluster values and host-network quirks |
 | [`licensing.md`](licensing.md) | BUSL 1.1, OpenBao, and the outstanding policy check |
 | [`key-custody.md`](key-custody.md) | Unseal-key custody |
 | [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) | The seal lifecycle |
