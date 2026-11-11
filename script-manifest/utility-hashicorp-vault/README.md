@@ -13,8 +13,8 @@ in the vault repo**, not this README. Where the two disagree, the PRD wins.
 > of every document here, and the lessons learned.
 >
 > **Status (2026-11-01):** deployed and bootstrapped. All ArgoCD apps are Synced/Healthy,
-> scripts `00`–`99` have run, and **the root token is revoked**. Still open: the A2
-> password-manager unseal check, the A9.3 restore drill, and A4 (3 replicas).
+> scripts `00`–`99` have run, and **the root token is revoked**. The A2 password-manager
+> unseal check passed on 2026-11-11. Still open: the A9.3 restore drill, and A4 (3 replicas).
 
 ---
 

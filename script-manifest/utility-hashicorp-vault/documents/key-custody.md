@@ -215,9 +215,9 @@ alternative above becomes the requirement.
 
 - [x] Password-manager copy created (replaced with the post-rekey file on 2026-11-01,
       break-glass password added to the same note)
-- [ ] **Restore verified**: seal a node and unseal it using a share retrieved
-      from the password-manager copy — *not* the working file. Procedure:
-      [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) → *Key custody*
+- [x] **Restore verified**: seal a node and unseal it using a share retrieved
+      from the password-manager copy — *not* the working file. Done 2026-11-11.
+      Procedure: [`runbooks/seal-unseal.md`](runbooks/seal-unseal.md) → *Key custody*
 - [x] This document completed (holders table filled)
 
 > **A backup you have never read from is a hypothesis.** The verification step
@@ -263,9 +263,9 @@ Record custody events here. **Events only — never contents.**
 | 2026-11-01 | `generate-root` exercised once, via break-glass (A6 gate) | Adhito | Decoded token had policy `root`; that token revoked straight after |
 | 2026-11-01 | **Shares exposed**: all five shown in a screenshot, one pasted, in an AI-assistant chat session while debugging the step above | Adhito | — |
 | 2026-11-01 | Rekey, 5 shares / threshold 3 (`85-rekey.sh`, `require_verification`), same day as the exposure. The pre-rekey file was deleted | Adhito | 3/3 new shares verified from the saved file before the switch; Vault still unsealed |
-| 2026-11-01 | Password-manager copy replaced with the post-rekey `vault-init.json` | Adhito | Not yet read back — see the A2 row |
-| ______ | Restore verified from second copy (A2 gate) | ______ | ______ |
-| 2026-11-01 | Break-glass password added to the password-manager note | Adhito | Not yet read back — check it alongside the A2 row |
+| 2026-11-01 | Password-manager copy replaced with the post-rekey `vault-init.json` | Adhito | Read back 2026-11-11 — see the A2 row |
+| 2026-11-01 | Break-glass password added to the password-manager note | Adhito | Read back 2026-11-11 — see the A2 row |
+| 2026-11-11 | **Restore verified from second copy (A2 gate)**: `vault-0` restarted (sealed), unsealed with `unseal_keys_b64` [2], [3], [4] typed from the password-manager copy; break-glass password from the same note logged in | Adhito | `Sealed false`, `HA Mode active`; break-glass `generate-root -status` answered; ESO store `Valid` afterwards |
 | 2026-11-01 | Root token revoked (A6, D10) — `99-revoke-root.sh`, after the rekey | Adhito | Preflight 15/15 incl. live break-glass login; the script confirmed the token no longer works |
 
 ---
