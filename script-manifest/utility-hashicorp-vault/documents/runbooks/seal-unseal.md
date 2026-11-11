@@ -236,11 +236,16 @@ never the shares.**
 
 > **A backup you have never read from is a hypothesis.** A2's exit gate requires
 > sealing a node and unsealing it from a share retrieved out of the
-> password-manager copy, not the working file. *Still open as of 2026-11-01.*
+> password-manager copy, not the working file. *Passed 2026-11-11 (procedure
+> below); recorded in `key-custody.md`.* Repeat every 6 months and after any rekey.
 >
 > Break-glass has no `sys/seal` permission, so do it by restarting the pod, which
-> always seals: `kubectl -n vault delete pod vault-0`. Wait for `Running 0/1`, then
-> unseal through the NodePort. Paste three `unseal_keys_b64` entries **from the
+> always seals: `kubectl -n vault delete pod vault-0`. The new pod turns `1/1 Running`
+> within seconds **while still sealed**: the readiness probe counts sealed as ready
+> (`sealedcode=204`). Confirm with `vault status` over the NodePort (`Sealed true`), then
+> unseal through the NodePort. Note that break-glass can't `token lookup-self`
+> or `revoke -self`, since it has no `default` policy. Check it with
+> `vault operator generate-root -status` instead. Paste three `unseal_keys_b64` entries **from the
 > password manager** into the hidden `vault operator unseal` prompt. Pick ones the
 > scripts haven't used, for example `[2]`–`[4]`.
 

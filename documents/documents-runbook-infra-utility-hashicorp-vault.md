@@ -31,13 +31,13 @@ configure what lives inside Vault. `vagrant provision` touches none of it.
 
 ---
 
-## Current status (2026-11-01)
+## Current status (2026-11-11)
 
 | Phase | What | State |
 |---|---|---|
 | A0–A1 | Prerequisites (storage, cert-manager, namespaces), ArgoCD root app | ✅ Done; all apps Synced / Healthy |
 | A2 | Init + unseal (`00`) | ✅ Done 2026-10-05 |
-| A2 gate | **Unseal using shares read from the password-manager copy** | ⏳ **Open**. Every check so far used the working file |
+| A2 gate | Unseal using shares read from the password-manager copy | ✅ Passed 2026-11-11: `vault-0` restarted, unsealed with shares typed from the password manager |
 | A6 | Kubernetes auth, policies, isolation tests, break-glass, root revoked | ✅ Done 2026-11-01 (`70` passed 10/10, `95` 9/9) |
 | A7 | KV, dynamic Postgres credentials, revocation proof | ✅ Done 2026-11-01 |
 | A9.1–A9.2 | Audit to stdout, first snapshot | ✅ Done 2026-11-01 |
@@ -180,6 +180,11 @@ Each one cost time on this cluster. Details are in the linked documents.
 **Networking**
 - **A sealed Vault is unreachable on the VIP.** `vault-lb` only routes to the
   active pod. Unseal through the NodePort `:30004`. *(seal-unseal.md)*
+- **`1/1 Running` does not mean unsealed.** The readiness probe counts a sealed pod
+  as ready (`sealedcode=204`), so only `vault status` tells you. *(seal-unseal.md)*
+- **The break-glass token can't look itself up or revoke itself.** It has no `default`
+  policy, so a `403` on `token lookup` is expected. Test it with
+  `vault operator generate-root -status`. *(seal-unseal.md)*
 - **The host network drops UDP DNS.** CoreDNS was switched to TCP upstreams by a
   live hotfix that is not in code (backlog #5). If ESO or ArgoCD start failing on name
   resolution after a cluster rebuild, check this first. *(environment.md)*
@@ -224,7 +229,6 @@ Each one cost time on this cluster. Details are in the linked documents.
 
 | Item | Where |
 |---|---|
-| A2 gate: restart `vault-0`, unseal from the password-manager copy | [`key-custody.md`](../script-manifest/utility-hashicorp-vault/documents/key-custody.md) → Obligations |
 | Snapshot policy, so snapshots no longer need a regenerated root | [`snapshot-restore.md`](../script-manifest/utility-hashicorp-vault/documents/runbooks/snapshot-restore.md) |
 | A9.3 restore drill, recording the RTO | [`snapshot-restore.md`](../script-manifest/utility-hashicorp-vault/documents/runbooks/snapshot-restore.md) |
 | A4: 3 replicas, failover time, which worker hosts two peers | [`environment.md`](../script-manifest/utility-hashicorp-vault/documents/environment.md) → Measurements |
